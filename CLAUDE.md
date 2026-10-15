@@ -50,7 +50,11 @@ The code is split into a pure logic layer and a rendering layer:
   - `showDialog` adds a full-screen interactive shade that blocks taps underneath, and returns a function that closes it.
   - It shrinks the body font until the dialog fits the 720-high screen.
 - **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores the high score (`pairfect-best`) and the highest unlocked level index (`pairfect-unlocked`). Clearing level `i` unlocks `i + 1`, and the stage-select screen treats every index up to that value as open.
-- **`src/game/levels.ts`** defines the `LEVELS` array: `rows`, `cols` (wide, short boards such as 6×16), `types`, gravity mode and time for each level. `getLevel(i)` loops back through the levels after the last one, cutting 30 s each loop with a 90 s floor.
+- **`src/game/levels.ts`** defines the `LEVELS` array: `rows`, `cols` (wide, short boards such as 6×16), `types`, gravity mode and time for each level. After the last level, `getLevel(i)` continues endlessly:
+  - The board and `types` stay those of the last level.
+  - The gravity cycles through the levels' gravities in order.
+  - Time starts from the last level's time and drops `LOOP_TIME_STEP` (30 s) per pass of 7, with a floor of `LOOP_MIN_TIME` (90 s).
+  - `docs/stages.md` (Vietnamese) explains every stage and the loop.
 - **`src/game/tileArt.ts`** draws tile textures procedurally under the keys `tile-1` to `tile-40` (`MAX_TYPES`). Textures are global, and both `MenuScene` and `GameScene` call the idempotent `createTileTextures`. To use real art, load images under the same keys in `MenuScene.preload()` and remove both calls.
 
 ### Key invariants

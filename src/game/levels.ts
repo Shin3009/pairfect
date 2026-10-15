@@ -35,9 +35,22 @@ export const GRAVITY_LABEL: Record<Gravity, string> = {
   'center-v': 'Dồn vào giữa (dọc)',
 };
 
-/** Sau màn cuối, lặp lại các màn với thời gian giảm dần. */
+/** Vòng lặp sau màn cuối: mỗi vòng bớt LOOP_TIME_STEP giây, không dưới LOOP_MIN_TIME giây. */
+export const LOOP_TIME_STEP = 30;
+export const LOOP_MIN_TIME = 90;
+
+/**
+ * Cấu hình màn theo chỉ số (từ 0). Sau màn cuối là vòng lặp vô tận:
+ * bàn và số loại giữ như màn cuối (khó nhất), kiểu dồn lặp lại theo thứ tự các màn,
+ * thời gian tính từ thời gian màn cuối và giảm dần theo từng vòng.
+ */
 export function getLevel(index: number): LevelConfig {
-  const base = LEVELS[index % LEVELS.length];
-  const loop = Math.floor(index / LEVELS.length);
-  return { ...base, time: Math.max(90, base.time - loop * 30) };
+  if (index < LEVELS.length) return { ...LEVELS[index] };
+  const last = LEVELS[LEVELS.length - 1];
+  const loop = Math.floor(index / LEVELS.length); // 1 ở vòng 2 (màn 8–14), 2 ở vòng 3...
+  return {
+    ...last,
+    gravity: LEVELS[index % LEVELS.length].gravity,
+    time: Math.max(LOOP_MIN_TIME, last.time - loop * LOOP_TIME_STEP),
+  };
 }
