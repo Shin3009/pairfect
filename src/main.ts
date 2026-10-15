@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { bindAppEvents } from './native';
 import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { sizeFor } from './scenes/ui';
@@ -37,6 +38,9 @@ new ResizeObserver(() => {
   resizeTimer = window.setTimeout(fitViewport, 120);
 }).observe(parent);
 game.events.once(Phaser.Core.Events.READY, fitViewport);
+
+// Nút Back của Android và việc app bị đưa xuống nền (xem native.ts)
+bindAppEvents(game);
 
 // Truy cập game từ DevTools khi phát triển: window.game.scene.getScene('Game')
 if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;

@@ -65,6 +65,7 @@ Trước khi phát hành, nên làm thêm:
 ```
 src/
   main.ts               Khởi tạo Phaser (màn ngang cao 720, rộng theo tỉ lệ màn hình)
+  native.ts             Nút Back của Android và việc app bị đưa xuống nền (plugin `@capacitor/app`)
   game/
     Board.ts            Toàn bộ logic: sinh bàn, đá chắn, tìm đường nối, gợi ý, đảo bàn, dồn ô
     Board.test.ts       Unit test cho logic
@@ -81,7 +82,9 @@ src/
 
 `Board.ts` không phụ thuộc Phaser nên có thể test riêng hoặc tái sử dụng.
 
-Luồng màn hình: `Menu` → `Game`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục.
+Luồng màn hình: `Menu` → `Game`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
+
+Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu (ở hộp thoại qua màn thì không làm gì, để lỡ tay không mất lượt chơi đang thắng); ở menu thì đóng hộp thoại đang mở, hoặc hỏi có thoát game không.
 
 ### Chỉ chơi màn ngang
 
@@ -105,6 +108,5 @@ Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset
 ## Gợi ý phát triển tiếp
 
 - Âm thanh khi chọn, khi nối, khi qua màn (`this.load.audio` + `this.sound.play`).
-- Nút Back của Android mở menu tạm dừng / quay lại: plugin `@capacitor/app`.
 - Rung khi nối thành công: plugin `@capacitor/haptics`.
 - Quảng cáo / mua trong ứng dụng: các plugin cộng đồng của Capacitor cho AdMob và Google Play Billing.

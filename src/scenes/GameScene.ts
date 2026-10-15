@@ -3,6 +3,7 @@ import { Board, same, type Gravity, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, textureFor, TEXTURE_SIZE } from '../game/tileArt';
 import { saveBest } from '../game/storage';
+import { onBack, onSuspend } from '../native';
 import { Button, C, IconButton, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
 /**
@@ -125,6 +126,10 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointer(p));
     this.time.addEvent({ delay: 100, loop: true, callback: () => this.tick(0.1) });
     onGameResize(this, () => this.relayout());
+    // Nút Back của Android: làm việc của hộp thoại đang mở, không có hộp thoại thì tạm dừng
+    onBack(this, () => (this.dialog ? this.dialog.opts.back?.() : this.pause()));
+    // App bị đưa xuống nền: tạm dừng, để khi quay lại đồng hồ không chạy tiếp ngay
+    onSuspend(this, () => this.pause());
   }
 
   // ---------------- Bố cục & hiển thị ----------------
@@ -514,6 +519,7 @@ export class GameScene extends Phaser.Scene {
         },
         { label: 'Về menu', onClick: () => this.scene.start('Menu') },
       ],
+      // Không có `back`: về menu là bỏ cả lượt chơi đang thắng, nên phải bấm chọn hẳn
     });
   }
 
@@ -528,6 +534,7 @@ export class GameScene extends Phaser.Scene {
         { label: 'Chơi lại', onClick: () => this.scene.restart({ level: this.levelIndex, score: 0 }) },
         { label: 'Về menu', onClick: () => this.scene.start('Menu') },
       ],
+      back: () => this.scene.start('Menu'),
     });
   }
 
@@ -558,17 +565,17 @@ export class GameScene extends Phaser.Scene {
       title: 'Tạm dừng',
       shade: 0.92, // che gần kín bàn chơi để không xem trước nước đi khi đang dừng
       actions: [
-        {
-          label: 'Tiếp tục',
-          onClick: () => {
-            this.closeDialog();
-            this.setPaused(false);
-          },
-        },
+        { label: 'Tiếp tục', onClick: () => this.resume() },
         { label: 'Chơi lại màn', onClick: () => this.leave({ level: this.levelIndex, score: 0 }) },
         { label: 'Về menu', onClick: () => this.leave() },
       ],
+      back: () => this.resume(),
     });
+  }
+
+  private resume(): void {
+    this.closeDialog();
+    this.setPaused(false);
   }
 
   /** Rời màn đang chơi dở: lưu kỷ lục rồi chơi lại màn (có `restart`) hoặc về menu. */

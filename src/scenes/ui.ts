@@ -168,6 +168,11 @@ export interface DialogOptions {
   title: string;
   body?: string;
   actions: DialogAction[];
+  /**
+   * Việc làm khi bấm nút Back của Android lúc hộp thoại đang mở (scene tự gọi, xem native.ts).
+   * Bỏ trống thì Back không làm gì, buộc người chơi chọn một nút.
+   */
+  back?: () => void;
   /** Độ đậm của lớp phủ tối phía sau hộp thoại. */
   shade?: number;
   /** Chiều rộng khung hộp thoại. */

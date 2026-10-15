@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { HARD_START } from '../game/levels';
 import { loadBest } from '../game/storage';
 import { createTileTextures, MAX_TYPES, TEXTURE_SIZE, tileKey } from '../game/tileArt';
-import { Button, C, onGameResize, showDialog, textStyle } from './ui';
+import { exitApp, onBack } from '../native';
+import { Button, C, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
 const HOW_TO_PLAY = [
   'Chạm hai ô có hình giống nhau để nối và xóa chúng.',
@@ -20,14 +21,19 @@ const DECOR_SIDE: [number, number][] = [[130, 150], [280, 260], [140, 450], [280
 const DECOR_SIZE = 96;
 
 export class MenuScene extends Phaser.Scene {
+  private dialog: { opts: DialogOptions; close: () => void } | null = null;
+
   constructor() {
     super('Menu');
   }
 
   create(): void {
+    this.dialog = null;
     createTileTextures(this);
     this.cameras.main.setBackgroundColor(C.bg).fadeIn(250, 31, 59, 77);
     onGameResize(this, () => this.scene.restart());
+    // Nút Back của Android: làm việc của hộp thoại đang mở, không có hộp thoại thì hỏi thoát game
+    onBack(this, () => (this.dialog ? this.dialog.opts.back?.() : this.confirmExit()));
 
     const W = this.scale.width;
     const x = W / 2;
@@ -42,12 +48,34 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private showHowToPlay(): void {
-    const close = showDialog(this, {
+    this.openDialog({
       title: 'Cách chơi',
       body: HOW_TO_PLAY,
       width: 900,
-      actions: [{ label: 'Đã hiểu', onClick: () => close() }],
+      actions: [{ label: 'Đã hiểu', onClick: () => this.closeDialog() }],
+      back: () => this.closeDialog(),
     });
+  }
+
+  private confirmExit(): void {
+    this.openDialog({
+      title: 'Thoát game?',
+      actions: [
+        { label: 'Thoát', onClick: () => exitApp() },
+        { label: 'Ở lại', onClick: () => this.closeDialog() },
+      ],
+      back: () => this.closeDialog(),
+    });
+  }
+
+  private openDialog(opts: DialogOptions): void {
+    this.closeDialog();
+    this.dialog = { opts, close: showDialog(this, opts) };
+  }
+
+  private closeDialog(): void {
+    this.dialog?.close();
+    this.dialog = null;
   }
 
   /** Mỗi lần mở menu chọn ngẫu nhiên 4 loại hình, mỗi loại hai ô (một cặp). */
