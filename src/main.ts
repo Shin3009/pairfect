@@ -3,11 +3,13 @@ import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { sizeFor } from './scenes/ui';
 
-const initial = sizeFor(window.innerWidth, window.innerHeight);
+// Khung chứa game: cả màn hình trừ phần tai thỏ / camera đục lỗ (xem index.html)
+const parent = document.getElementById('game')!;
+const initial = sizeFor(parent.clientWidth, parent.clientHeight);
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  parent: 'game',
+  parent,
   width: initial.width,
   height: initial.height,
   backgroundColor: '#1f3b4d',
@@ -24,15 +26,16 @@ const game = new Phaser.Game({
 // Game chỉ chơi màn ngang: app Android khóa hướng ngang, trình duyệt dọc thì index.html hiện lời nhắc xoay máy.
 function fitViewport(): void {
   if (!game.isBooted) return;
-  const { width, height } = sizeFor(window.innerWidth, window.innerHeight);
+  const { width, height } = sizeFor(parent.clientWidth, parent.clientHeight);
   if (game.scale.width !== width || game.scale.height !== height) game.scale.setGameSize(width, height);
 }
-// Chờ cửa sổ thôi thay đổi (kéo cửa sổ bắn rất nhiều sự kiện) rồi mới dựng lại bố cục
+// Theo dõi chính khung chứa: nó đổi cả khi cửa sổ giữ nguyên mà vùng tai thỏ đổi.
+// Chờ khung thôi thay đổi (kéo cửa sổ bắn rất nhiều sự kiện) rồi mới dựng lại bố cục.
 let resizeTimer = 0;
-window.addEventListener('resize', () => {
+new ResizeObserver(() => {
   clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(fitViewport, 120);
-});
+}).observe(parent);
 game.events.once(Phaser.Core.Events.READY, fitViewport);
 
 // Truy cập game từ DevTools khi phát triển: window.game.scene.getScene('Game')

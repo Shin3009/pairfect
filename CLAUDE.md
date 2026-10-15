@@ -29,6 +29,7 @@ In dev mode, `main.ts` exposes `window.game`. Use `game.scene.getScene('Game')` 
 
 - `build-apk.bat` (a wrapper for `build-apk.ps1`) is the one-command Windows build. It accepts `-Release`, `-Install`, `-SdkPath`, `-JdkPath`, `-KeystorePath` and `-KeyAlias`. It finds the Android SDK and a Java 21–24 JDK automatically, because Gradle 8.14 rejects newer JDKs bundled with recent Android Studio builds.
   - On the first run it does `npx cap add android`; on later runs it does `npx cap sync android`. Every run sets `android:screenOrientation="userLandscape"` in `AndroidManifest.xml`, which locks landscape (either direction) and also updates older generated projects.
+  - Every run also rewrites `MainActivity.java` (keeping its `package` line) so the system bars stay hidden in immersive mode: a swipe from the edge shows them only briefly over the game, and they are hidden again whenever the window regains focus. `SystemBars.hidden: true` in `capacitor.config.ts` hides them at startup; keep it, or the SystemBars plugin shows the bars again on load.
   - Capacitor's activity declares `configChanges="orientation|screenSize|..."`, so size changes (split screen, flipping between the two landscape directions) resize the WebView instead of recreating the activity.
   - It writes the APK to `apk-output/Pairfect-v<package.json version>-<debug|release>.apk`.
   - The release keystore defaults to `%USERPROFILE%\.android-keystores\pairfect-release.jks`, outside the repo.
@@ -74,7 +75,7 @@ The code is split into a pure logic layer and a rendering layer:
 - **Board ↔ sprite sync.** After a match, `Board.remove()` returns the `Move[]` produced by gravity. `GameScene.matchPair` uses that list to re-key `sprites` and tween each moved sprite. A shuffle never moves tiles: it only reassigns values among occupied cells, and `syncTextures` swaps the textures in place.
 - **Level constraints.** `rows * cols` must be even (the `Board` constructor throws otherwise), boards should be wider than tall and at most 7×20 (beyond that, tiles get too small on a 4:3 tablet), and a level's `types` must not exceed `MAX_TYPES` (40). `levels.test.ts` checks this and auto-plays every level to a clear.
 - **Game size.** The logical height is fixed at 720. The width follows the viewport aspect ratio, clamped to 1100–1600, so the canvas fills the screen width; it's scaled with `Scale.FIT`.
-  - `main.ts` recomputes the size via `sizeFor` on window resize (debounced) and calls `game.scale.setGameSize` when it changes.
+  - `main.ts` sizes the game from the `#game` container, not the window. `index.html` insets that container by `env(safe-area-inset-*)`, so on full-screen phones the HUD stays clear of a display cutout (punch-hole camera) while the background fills the rest. A `ResizeObserver` on the container recomputes the size via `sizeFor` (debounced) and calls `game.scale.setGameSize` when it changes.
   - Scenes lay out X positions relative to `this.scale.width`, because the width varies. Y positions can assume 720.
   - Each scene registers `onGameResize` in `create()`. The menu simply restarts.
   - The game HUD is a thin one-row top bar (`HUD_H` = 80), because height is what limits tile size. It's laid out left to right as stage, gravity, Hint, Shuffle, Pause, time bar, score.

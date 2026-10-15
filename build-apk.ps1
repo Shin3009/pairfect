@@ -298,6 +298,44 @@ if ($newXml -ne $xml) {
   Write-Ok 'Đã khóa màn hình ngang trong AndroidManifest.xml'
 }
 
+# Chơi toàn màn hình. SystemBars.hidden trong capacitor.config.ts ẩn thanh trạng thái và thanh điều hướng lúc mở app,
+# nhưng người chơi vuốt từ mép màn hình một lần là chúng hiện luôn, đè lên HUD. MainActivity cho vuốt chỉ hiện tạm
+# rồi tự ẩn, và ẩn lại mỗi khi app được dùng tiếp (sau khi kéo rèm thông báo, chuyển app rồi quay lại...).
+# Ghi lại cả file mỗi lần build, giữ nguyên dòng package (đổi theo appId).
+$activity = Get-ChildItem -Path (Join-Path $androidDir 'app\src\main\java') -Filter 'MainActivity.java' -Recurse |
+  Select-Object -First 1
+if (-not $activity) { Fail 'Không thấy MainActivity.java trong project Android. Xóa thư mục android\ rồi chạy lại script.' }
+$java = [IO.File]::ReadAllText($activity.FullName)
+$package = ([regex]'(?m)^package\s+[\w.]+;').Match($java).Value
+if (-not $package) { Fail "Không đọc được dòng package trong $($activity.FullName)." }
+$newJava = @"
+$package
+
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+import com.getcapacitor.BridgeActivity;
+
+// File này do build-apk.ps1 ghi lại mỗi lần build: muốn đổi thì sửa trong script.
+public class MainActivity extends BridgeActivity {
+
+    // Ẩn thanh trạng thái và thanh điều hướng mỗi khi app được dùng tiếp. Vuốt từ mép màn hình
+    // chỉ hiện tạm hai thanh này đè lên game, rồi chúng tự ẩn lại.
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus) return;
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        bars.hide(WindowInsetsCompat.Type.systemBars());
+    }
+}
+"@
+if ($newJava -ne $java) {
+  [IO.File]::WriteAllText($activity.FullName, $newJava, (New-Object Text.UTF8Encoding $false))
+  Write-Ok 'Đã bật chế độ toàn màn hình trong MainActivity.java'
+}
+
 # Ghi đường dẫn SDK vào local.properties để Gradle và Android Studio dùng đúng SDK
 $lpFile = Join-Path $androidDir 'local.properties'
 $lpLine = 'sdk.dir=' + $sdk.Replace('\', '\\').Replace(':', '\:')
