@@ -20,8 +20,9 @@ const game = new Phaser.Game({
   scene: [MenuScene, LevelSelectScene, GameScene],
 });
 
-// Xoay máy hoặc đổi tỉ lệ cửa sổ: đổi kích thước logic cho khớp màn hình.
+// Tỉ lệ màn hình đổi (chia đôi màn hình, kéo cửa sổ): đổi chiều rộng logic cho khớp.
 // Các scene nghe sự kiện resize (qua onGameResize) để sắp xếp lại bố cục.
+// Game chỉ chơi màn ngang: app Android khóa hướng ngang, trình duyệt dọc thì index.html hiện lời nhắc xoay máy.
 function fitViewport(): void {
   if (!game.isBooted) return;
   const { width, height } = sizeFor(window.innerWidth, window.innerHeight);

@@ -1,21 +1,12 @@
 import Phaser from 'phaser';
 import { Board, same, type Point } from '../game/Board';
-import { getLevel, GRAVITY_LABEL, orient, type LevelConfig } from '../game/levels';
+import { getLevel, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, tileKey, TEXTURE_SIZE } from '../game/tileArt';
 import { loadBest, saveBest, unlockLevel } from '../game/storage';
-import {
-  Button,
-  C,
-  isLandscape,
-  onGameResize,
-  showDialog,
-  textStyle,
-  type DialogOptions,
-} from './ui';
+import { Button, C, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
-// Chiều cao thanh HUD phía trên. Màn ngang thấp nên HUD gọn một hàng để nhường chỗ cho bàn chơi.
-const HUD_H_PORTRAIT = 210;
-const HUD_H_LANDSCAPE = 128;
+// Thanh HUD phía trên gọn một hàng: màn ngang thấp nên nhường tối đa chiều cao cho bàn chơi.
+const HUD_H = 128;
 const MARGIN = 12;
 const HINTS_PER_LEVEL = 3;
 const SHUFFLES_PER_LEVEL = 3;
@@ -40,7 +31,6 @@ export class GameScene extends Phaser.Scene {
   private cfg!: LevelConfig;
   private board!: Board;
 
-  private landscape = false;
   private sprites: (Phaser.GameObjects.Image | null)[][] = [];
   private cell = 0;
   private originX = 0;
@@ -58,7 +48,7 @@ export class GameScene extends Phaser.Scene {
   private ended = false;
   private paused = false;
 
-  /** Mọi đối tượng của HUD, để dựng lại khi xoay màn hình. */
+  /** Mọi đối tượng của HUD, để dựng lại khi kích thước màn hình đổi. */
   private hud: { destroy(): void }[] = [];
   private scoreText!: Phaser.GameObjects.Text;
   private timeBar!: Phaser.GameObjects.Graphics;
@@ -92,10 +82,7 @@ export class GameScene extends Phaser.Scene {
     createTileTextures(this);
     this.cameras.main.setBackgroundColor(C.bg);
 
-    // Hướng màn hình lúc bắt đầu màn quyết định bàn nằm dọc hay ngang
-    this.landscape = isLandscape(this);
-    const { rows, cols } = orient(this.cfg, this.landscape);
-    this.board = new Board(rows, cols);
+    this.board = new Board(this.cfg.rows, this.cfg.cols);
     this.board.generate(this.cfg.types);
 
     this.layoutBoard();
@@ -113,15 +100,11 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------- Bố cục & hiển thị ----------------
 
-  private get hudHeight(): number {
-    return this.landscape ? HUD_H_LANDSCAPE : HUD_H_PORTRAIT;
-  }
-
   private layoutBoard(): void {
     const W = this.scale.width;
     const H = this.scale.height;
     // Vùng đặt bàn: toàn bộ phần dưới thanh HUD
-    const area: Rect = { x: 0, y: this.hudHeight, w: W, h: H - this.hudHeight };
+    const area: Rect = { x: 0, y: HUD_H, w: W, h: H - HUD_H };
     const { rows, cols } = this.board;
     // +2 vì có viền ngoài để vẽ đường nối vòng
     this.cell = Math.floor(Math.min((area.w - MARGIN * 2) / (cols + 2), (area.h - MARGIN * 2) / (rows + 2)));
@@ -129,12 +112,8 @@ export class GameScene extends Phaser.Scene {
     this.originY = Math.round(area.y + (area.h - this.cell * (rows + 2)) / 2);
   }
 
-  /**
-   * Xoay máy (hoặc đổi tỉ lệ cửa sổ) giữa màn: giữ nguyên bàn chơi và trạng thái, chỉ sắp xếp lại bố cục.
-   * Bàn không đổi hàng ↔ cột giữa chừng (sẽ làm sai hướng dồn ô); màn sau mới theo hướng mới.
-   */
+  /** Tỉ lệ màn hình đổi giữa màn (chia đôi màn hình, kéo cửa sổ): giữ nguyên trạng thái, chỉ sắp xếp lại bố cục. */
   private relayout(): void {
-    this.landscape = isLandscape(this);
     this.layoutBoard();
 
     const scale = (this.cell - 2) / TEXTURE_SIZE;
@@ -191,44 +170,30 @@ export class GameScene extends Phaser.Scene {
 
   private createHud(): void {
     const W = this.scale.width;
-    const hudH = this.hudHeight;
     const keep = <T extends { destroy(): void }>(o: T): T => {
       this.hud.push(o);
       return o;
     };
-    const pause = () => this.pause();
-    const hint = () => this.useHint();
-    const shuffle = () => this.useShuffle();
 
     // Thanh HUD trải hết chiều ngang. Trái: màn + kiểu dồn; phải: điểm + kỷ lục.
     keep(this.add.graphics())
       .fillStyle(C.panel, 1)
-      .fillRoundedRect(MARGIN, MARGIN, W - MARGIN * 2, hudH - MARGIN * 2, 20);
-    const row1 = this.landscape ? 20 : 30;
-    const row2 = this.landscape ? 70 : 80;
-    keep(this.add.text(36, row1, `Màn ${this.levelIndex + 1}`, textStyle(40, C.text, 'bold')));
-    keep(this.add.text(36, row2, GRAVITY_LABEL[this.cfg.gravity], textStyle(24, C.textDim)));
-    this.scoreText = keep(this.add.text(W - 36, row1, '', textStyle(40, C.text, 'bold')).setOrigin(1, 0));
-    keep(this.add.text(W - 36, row2, `Kỷ lục: ${loadBest()}`, textStyle(24, C.textDim)).setOrigin(1, 0));
-    this.timeBar = keep(this.add.graphics());
+      .fillRoundedRect(MARGIN, MARGIN, W - MARGIN * 2, HUD_H - MARGIN * 2, 20);
+    keep(this.add.text(36, 20, `Màn ${this.levelIndex + 1}`, textStyle(40, C.text, 'bold')));
+    keep(this.add.text(36, 70, GRAVITY_LABEL[this.cfg.gravity], textStyle(24, C.textDim)));
+    this.scoreText = keep(this.add.text(W - 36, 20, '', textStyle(40, C.text, 'bold')).setOrigin(1, 0));
+    keep(this.add.text(W - 36, 70, `Kỷ lục: ${loadBest()}`, textStyle(24, C.textDim)).setOrigin(1, 0));
 
-    if (this.landscape) {
-      // Một hàng ở giữa: Gợi ý | nút dừng | Đảo bàn, thanh thời gian ngay bên dưới
-      keep(new Button(this, W / 2, 50, 60, 60, 'II', pause));
-      this.hintBtn = keep(new Button(this, W / 2 - 148, 50, 200, 52, '', hint));
-      this.shuffleBtn = keep(new Button(this, W / 2 + 148, 50, 200, 52, '', shuffle));
-      this.timeBarRect = { x: W / 2 - 248, y: 92, w: 496, h: 12 };
-    } else {
-      // Nút dừng giữa hàng trên, thanh thời gian, hai nút trợ giúp ở hàng dưới
-      keep(new Button(this, W / 2, 58, 64, 64, 'II', pause));
-      this.timeBarRect = { x: 36, y: 116, w: W - 72, h: 12 };
-      this.hintBtn = keep(new Button(this, 200, 164, 300, 52, '', hint));
-      this.shuffleBtn = keep(new Button(this, W - 200, 164, 300, 52, '', shuffle));
-    }
+    // Giữa: Gợi ý | nút dừng | Đảo bàn, thanh thời gian ngay bên dưới
+    keep(new Button(this, W / 2, 50, 60, 60, 'II', () => this.pause()));
+    this.hintBtn = keep(new Button(this, W / 2 - 148, 50, 200, 52, '', () => this.useHint()));
+    this.shuffleBtn = keep(new Button(this, W / 2 + 148, 50, 200, 52, '', () => this.useShuffle()));
+    this.timeBar = keep(this.add.graphics());
+    this.timeBarRect = { x: W / 2 - 248, y: 92, w: 496, h: 12 };
 
     this.toastText = keep(
       this.add
-        .text(W / 2, hudH + 30, '', textStyle(28, C.textDark, 'bold'))
+        .text(W / 2, HUD_H + 30, '', textStyle(28, C.textDark, 'bold'))
         .setOrigin(0.5)
         .setBackgroundColor('#ffc857')
         .setPadding(18, 8, 18, 8)

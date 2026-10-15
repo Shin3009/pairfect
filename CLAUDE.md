@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Pairfect: Tile Connect is a tile-matching game with the same rules as Onet / Shisen-Sho. Two tiles of the same type connect when a path through empty cells has **at most 2 turns**, and that path may loop around outside the board edge. It is built with Phaser 4 + TypeScript + Vite and packaged for Android with Capacitor 8.
 
+The game is **landscape-only** and aimed at tablets. Portrait support was removed on purpose; the last version that supported both orientations is commit `d66039d`.
+
 The README, code comments and in-game UI strings are written in **Vietnamese**. Keep new comments and player-facing text in Vietnamese to match.
 
 ## Commands
@@ -26,8 +28,8 @@ In dev mode, `main.ts` exposes `window.game`. Use `game.scene.getScene('Game')` 
 ### Android
 
 - `build-apk.bat` (a wrapper for `build-apk.ps1`) is the one-command Windows build. It accepts `-Release`, `-Install`, `-SdkPath`, `-JdkPath`, `-KeystorePath` and `-KeyAlias`. It finds the Android SDK and a Java 21–24 JDK automatically, because Gradle 8.14 rejects newer JDKs bundled with recent Android Studio builds.
-  - On the first run it does `npx cap add android`; on later runs it does `npx cap sync android`. Every run sets `android:screenOrientation="fullUser"` in `AndroidManifest.xml`, so older generated projects that were locked to portrait get updated too.
-  - Capacitor's activity declares `configChanges="orientation|screenSize|..."`, so rotating resizes the WebView instead of recreating the activity. The game keeps its state across rotation.
+  - On the first run it does `npx cap add android`; on later runs it does `npx cap sync android`. Every run sets `android:screenOrientation="userLandscape"` in `AndroidManifest.xml`, which locks landscape (either direction) and also updates older generated projects.
+  - Capacitor's activity declares `configChanges="orientation|screenSize|..."`, so size changes (split screen, flipping between the two landscape directions) resize the WebView instead of recreating the activity.
   - It writes the APK to `apk-output/Pairfect-v<package.json version>-<debug|release>.apk`.
   - The release keystore defaults to `%USERPROFILE%\.android-keystores\pairfect-release.jks`, outside the repo.
 - Manual flow: `npm run android:sync` (build + `cap sync`), then `npm run android:open`.
@@ -44,11 +46,11 @@ The code is split into a pure logic layer and a rendering layer:
 - **Scenes** run in the order `Menu` → `Levels` (stage select, optional) → `Game`, and are registered in `main.ts`; the first in the list starts on launch. Scenes switch with `this.scene.start(key, data)`. `Game` takes `{ level, score }` (`SceneData`) and moves to the next level with `this.scene.restart(...)`.
 - **`src/scenes/GameScene.ts`** holds all gameplay: rendering, input, tweens, the HUD, the timer, pause, and the win/lose dialogs. Tuning constants sit at the top of the file: hints and shuffles per level, score per pair, and time bonus.
   - Pausing sets `this.time.paused` and `this.tweens.paused` and shows a dialog in the same scene. Phaser keeps both flags when a scene restarts, so `create()` clears them with `setPaused(false)`. Any new way into or out of the scene must not leave them set.
-- **`src/scenes/ui.ts`** holds shared UI: the sizing helpers (`PORTRAIT_SIZE`, `LANDSCAPE_H`, `LANDSCAPE_MIN_W` / `LANDSCAPE_MAX_W`, `sizeFor`, `isLandscape`, `onGameResize`), the color palette `C`, `textStyle`, `Button`, and `showDialog`.
+- **`src/scenes/ui.ts`** holds shared UI: the sizing helpers (`GAME_H`, `GAME_MIN_W` / `GAME_MAX_W`, `sizeFor`, `onGameResize`), the color palette `C`, `textStyle`, `Button`, and `showDialog`.
   - `showDialog` adds a full-screen interactive shade that blocks taps underneath, and returns a function that closes it.
-  - It shrinks the body font until the dialog fits the screen height, which matters on the short landscape screen.
+  - It shrinks the body font until the dialog fits the 720-high screen.
 - **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores the high score (`pairfect-best`) and the highest unlocked level index (`pairfect-unlocked`). Clearing level `i` unlocks `i + 1`, and the stage-select screen treats every index up to that value as open.
-- **`src/game/levels.ts`** defines the `LEVELS` array: portrait `rows`/`cols`, a `landscape` board size, `types`, gravity mode and time for each level. `getLevel(i)` loops back through the levels after the last one, cutting 30 s each loop with a 90 s floor.
+- **`src/game/levels.ts`** defines the `LEVELS` array: `rows`, `cols` (wide, short boards such as 6×16), `types`, gravity mode and time for each level. `getLevel(i)` loops back through the levels after the last one, cutting 30 s each loop with a 90 s floor.
 - **`src/game/tileArt.ts`** draws tile textures procedurally under the keys `tile-1` to `tile-40` (`MAX_TYPES`). Textures are global, and both `MenuScene` and `GameScene` call the idempotent `createTileTextures`. To use real art, load images under the same keys in `MenuScene.preload()` and remove both calls.
 
 ### Key invariants
@@ -56,14 +58,14 @@ The code is split into a pure logic layer and a rendering layer:
 - **Padded grid.** `Board.grid` is `(rows + 2) × (cols + 2)`. Real tiles live at rows `1..rows` and cols `1..cols`, and `0` means empty. The empty border is what lets paths wrap around the board edge without special cases. Every `Point` (`{ r, c }`) uses these padded coordinates, including in tests and in `GameScene.sprites`, which mirrors the grid shape.
 - **Pathfinding.** Every path with at most 2 turns has the shape `a → p → q → b`, where the middle segment `p → q` lies on some full row or column. `findPath` tries every row and column, including the border ones, keeps the shortest clear path, and returns only its corner points.
 - **Board ↔ sprite sync.** After a match, `Board.remove()` returns the `Move[]` produced by gravity. `GameScene.matchPair` uses that list to re-key `sprites` and tween each moved sprite. A shuffle never moves tiles: it only reassigns values among occupied cells, and `syncTextures` swaps the textures in place.
-- **Level constraints.** `rows * cols` must be even (the `Board` constructor throws otherwise), and a level's `types` must not exceed `MAX_TYPES` (40).
-- **Game size.** The logical size is a fixed 720×1280 in portrait. In landscape the height is 720 and the width follows the viewport aspect ratio, clamped to 1100–1600, so the canvas fills the screen width. It's scaled with `Scale.FIT`.
+- **Level constraints.** `rows * cols` must be even (the `Board` constructor throws otherwise), boards should be wider than tall, and a level's `types` must not exceed `MAX_TYPES` (40). `levels.test.ts` checks this and auto-plays every level to a clear.
+- **Game size.** The logical height is fixed at 720. The width follows the viewport aspect ratio, clamped to 1100–1600, so the canvas fills the screen width; it's scaled with `Scale.FIT`.
   - `main.ts` recomputes the size via `sizeFor` on window resize (debounced) and calls `game.scale.setGameSize` when it changes.
-  - Scenes must lay out from `this.scale.width` / `this.scale.height` and branch on `isLandscape(this)`. Landscape X positions must be relative to the width, which varies; Y positions can assume 720.
-  - Each scene registers `onGameResize` in `create()`. It fires on any logical-size change, not only an orientation flip. Menu and stage select simply restart.
-  - In both orientations the game HUD is a full-width top bar. Landscape uses a compact one-row version (`HUD_H_LANDSCAPE`) because height is what limits tile size there.
+  - Scenes lay out X positions relative to `this.scale.width`, because the width varies. Y positions can assume 720.
+  - Each scene registers `onGameResize` in `create()`. Menu and stage select simply restart.
+  - The game HUD is a compact one-row top bar (`HUD_H`), because height is what limits tile size.
   - `GameScene.relayout()` keeps all state. It snaps sprites to their final positions and textures, rebuilds the HUD (every HUD object goes through `keep()` into `this.hud`), and reopens the current dialog (always open dialogs through `openDialog`).
-- **Board orientation.** Each level has a portrait size (`rows`/`cols`) and a wide, short `landscape` size (for example 12×8 becomes 6×16) with the same tile count, so the time limit stays fair. `orient(cfg, landscape)` picks the size and falls back to swapping rows and cols. `levels.test.ts` enforces these constraints and auto-plays every level in both orientations. The orientation is fixed when a level starts. Rotating mid-level only resizes the existing board, because transposing it would change what the gravity directions mean. Use `this.board.rows/cols`, not `this.cfg.rows/cols`, for anything grid-shaped.
+- **Portrait viewports.** These only happen in a browser, since Android is locked to landscape. `index.html` covers the game with a CSS "rotate your device" overlay (`@media (orientation: portrait)`), and the game keeps running underneath at the 1100 minimum width.
 - **Relative base path.** `vite.config.ts` uses `base: './'` so the build works inside the Capacitor WebView. Keep it relative.
 
 ### Tests

@@ -1,29 +1,22 @@
 import Phaser from 'phaser';
 
 /**
- * Kích thước logic của game; Phaser tự co giãn theo màn hình (Scale.FIT).
- * Màn dọc cố định 720x1280. Màn ngang cao 720, rộng theo tỉ lệ màn hình để lấp kín chiều ngang
- * (giới hạn trong khoảng LANDSCAPE_MIN_W..LANDSCAPE_MAX_W, ngoài khoảng đó sẽ có viền).
- * Khi xoay máy hay đổi tỉ lệ cửa sổ, main.ts đổi kích thước logic và các scene sắp xếp lại bố cục,
- * nên bố cục trong scene luôn tính theo `scene.scale.width` / `scene.scale.height`.
+ * Game chỉ chơi màn ngang. Kích thước logic cao GAME_H, rộng theo tỉ lệ màn hình để lấp kín chiều ngang
+ * (giới hạn GAME_MIN_W..GAME_MAX_W, ngoài khoảng đó sẽ có viền); Phaser tự co giãn (Scale.FIT).
+ * Khi tỉ lệ màn hình đổi (chia đôi màn hình, kéo cửa sổ), main.ts đổi kích thước logic và các scene
+ * sắp xếp lại bố cục, nên tọa độ theo chiều ngang luôn tính theo `scene.scale.width`.
  */
-export const PORTRAIT_SIZE = { width: 720, height: 1280 };
-export const LANDSCAPE_H = 720;
-export const LANDSCAPE_MIN_W = 1100;
-export const LANDSCAPE_MAX_W = 1600;
+export const GAME_H = 720;
+export const GAME_MIN_W = 1100;
+export const GAME_MAX_W = 1600;
 
-/** Kích thước logic hợp với khung hiển thị: ngang khi khung rộng hơn cao. */
+/** Kích thước logic hợp với khung hiển thị. */
 export function sizeFor(viewW: number, viewH: number): { width: number; height: number } {
-  if (viewW <= viewH) return PORTRAIT_SIZE;
-  const width = Phaser.Math.Clamp(Math.round((LANDSCAPE_H * viewW) / viewH), LANDSCAPE_MIN_W, LANDSCAPE_MAX_W);
-  return { width, height: LANDSCAPE_H };
+  const width = Phaser.Math.Clamp(Math.round((GAME_H * viewW) / viewH), GAME_MIN_W, GAME_MAX_W);
+  return { width, height: GAME_H };
 }
 
-export function isLandscape(scene: Phaser.Scene): boolean {
-  return scene.scale.width > scene.scale.height;
-}
-
-/** Gọi `fn` mỗi khi kích thước logic của game đổi (xoay máy, đổi tỉ lệ cửa sổ). Tự gỡ khi scene tắt. */
+/** Gọi `fn` mỗi khi kích thước logic của game đổi. Tự gỡ khi scene tắt. */
 export function onGameResize(scene: Phaser.Scene, fn: () => void): void {
   let { width, height } = scene.scale;
   const handler = () => {

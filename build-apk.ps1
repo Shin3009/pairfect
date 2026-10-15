@@ -7,7 +7,7 @@
   Script tự động:
     1. Kiểm tra Node.js, Android SDK, JDK 21 (tự chọn đúng phiên bản Java trên máy)
     2. Cài thư viện npm nếu chưa có
-    3. Build code web và tạo/đồng bộ project Android (cho phép xoay dọc/ngang)
+    3. Build code web và tạo/đồng bộ project Android (khóa màn hình ngang)
     4. Build APK (debug hoặc release đã ký)
     5. Chép APK vào thư mục apk-output\ và (tùy chọn) cài lên điện thoại qua USB
 
@@ -283,11 +283,11 @@ if (-not (Test-Path $androidDir)) {
   Invoke-Tool 'npx.cmd' @('cap', 'sync', 'android') 'Đồng bộ Capacitor'
 }
 
-# Cho phép xoay màn hình (game tự đổi bố cục dọc/ngang) nhưng vẫn theo khóa xoay của người dùng.
-# Chạy mỗi lần build để cập nhật cả project Android tạo từ bản cũ (khóa dọc).
+# Game chỉ chơi màn ngang: khóa hướng ngang (vẫn xoay được giữa hai chiều ngang, theo khóa xoay của người dùng).
+# Chạy mỗi lần build để cập nhật cả project Android tạo từ bản cũ (khóa dọc hoặc cho xoay tự do).
 $manifest = Join-Path $androidDir 'app\src\main\AndroidManifest.xml'
 $xml = [IO.File]::ReadAllText($manifest)
-$orientation = 'android:screenOrientation="fullUser"'
+$orientation = 'android:screenOrientation="userLandscape"'
 if ($xml -match 'android:screenOrientation="[^"]*"') {
   $newXml = $xml -replace 'android:screenOrientation="[^"]*"', $orientation
 } else {
@@ -295,7 +295,7 @@ if ($xml -match 'android:screenOrientation="[^"]*"') {
 }
 if ($newXml -ne $xml) {
   [IO.File]::WriteAllText($manifest, $newXml, (New-Object Text.UTF8Encoding $false))
-  Write-Ok 'Đã cho phép xoay màn hình (dọc/ngang) trong AndroidManifest.xml'
+  Write-Ok 'Đã khóa màn hình ngang trong AndroidManifest.xml'
 }
 
 # Ghi đường dẫn SDK vào local.properties để Gradle và Android Studio dùng đúng SDK

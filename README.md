@@ -33,7 +33,7 @@ build-apk.bat -Release         :: APK release đã ký để gửi người khá
 
 Script tự dò Android SDK theo thứ tự: biến `ANDROID_HOME`/`ANDROID_SDK_ROOT`, file `android\local.properties`, cấu hình của Android Studio (kể cả bản Preview/Canary), rồi các vị trí mặc định. Nếu vẫn không tìm thấy, lấy đường dẫn trong Android Studio (*Settings → Languages & Frameworks → Android SDK → Android SDK Location*) rồi chạy `build-apk.bat -SdkPath "<đường dẫn>"`. Tương tự, có thể chỉ định JDK bằng `-JdkPath "<thư mục cài Android Studio>\jbr"`.
 
-File APK nằm trong thư mục `apk-output\`. Script lo hết các bước: cài thư viện, build code, tạo project Android (lần đầu), cho phép xoay màn hình dọc/ngang, đồng bộ và build bằng Gradle. Lần build đầu tiên sẽ lâu vài phút vì Gradle phải tải thư viện.
+File APK nằm trong thư mục `apk-output\`. Script lo hết các bước: cài thư viện, build code, tạo project Android (lần đầu), khóa màn hình ngang, đồng bộ và build bằng Gradle. Lần build đầu tiên sẽ lâu vài phút vì Gradle phải tải thư viện.
 
 Với `-Release`, lần đầu script đề nghị tạo keystore tại `%USERPROFILE%\.android-keystores\pairfect-release.jks` (để ngoài project cho an toàn). Hãy sao lưu file này cùng mật khẩu: mất keystore là không thể phát hành bản cập nhật cho app nữa.
 
@@ -55,7 +55,7 @@ npm run android:open
 Trước khi phát hành, nên làm thêm:
 
 - Đổi `appId` trong `capacitor.config.ts` (ví dụ `com.tuan.pairfect`), làm trước khi chạy `cap add android`. Đây là ID vĩnh viễn trên Google Play.
-- Cho phép xoay màn hình: trong `android/app/src/main/AndroidManifest.xml`, đặt `android:screenOrientation="fullUser"` cho thẻ `<activity>` (xoay dọc/ngang nhưng vẫn theo nút khóa xoay của người dùng). `build-apk.bat` tự làm bước này.
+- Khóa màn hình ngang: trong `android/app/src/main/AndroidManifest.xml`, đặt `android:screenOrientation="userLandscape"` cho thẻ `<activity>` (xoay được giữa hai chiều ngang, theo nút khóa xoay của người dùng). `build-apk.bat` tự làm bước này.
 - Thay icon và splash: dùng gói `@capacitor/assets` để sinh tự động từ một ảnh gốc.
 - Build bản phát hành: trong Android Studio chọn *Build → Generate Signed App Bundle / APK*. Google Play yêu cầu định dạng AAB.
 
@@ -63,7 +63,7 @@ Trước khi phát hành, nên làm thêm:
 
 ```
 src/
-  main.ts               Khởi tạo Phaser (720x1280 dọc / cao 720 ngang), đổi kích thước khi xoay máy
+  main.ts               Khởi tạo Phaser (màn ngang cao 720, rộng theo tỉ lệ màn hình)
   game/
     Board.ts            Toàn bộ logic: sinh bàn, tìm đường nối, gợi ý, đảo bàn, dồn ô
     Board.test.ts       Unit test cho logic
@@ -81,9 +81,11 @@ src/
 
 Luồng màn hình: `Menu` → (`Levels`) → `Game`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục.
 
-### Màn dọc và màn ngang (tablet)
+### Chỉ chơi màn ngang
 
-Game tự chọn bố cục theo hướng màn hình. Cả hai hướng đều có thanh HUD phía trên trải hết chiều ngang; màn ngang (tablet) dùng HUD gọn một hàng để bàn chơi có thêm chiều cao. Màn dọc có kích thước logic cố định 720x1280; màn ngang cao 720 và rộng theo tỉ lệ màn hình (1100–1600) để lấp kín chiều ngang. Mỗi màn có kích thước bàn riêng cho màn ngang (trường `landscape` trong `LEVELS`, ví dụ 12x8 thành 6x16): bàn thấp và rộng để lấp chiều ngang, cùng số ô với bản dọc nên thời gian vẫn như cũ. Xoay máy giữa màn thì bàn đang chơi giữ nguyên, chỉ sắp xếp lại bố cục; màn tiếp theo mới theo hướng mới. Khi chạy `npm run dev`, kéo cửa sổ trình duyệt cho rộng hơn cao để xem bố cục ngang.
+Game chỉ chơi màn ngang (hướng tới tablet). Kích thước logic cao 720 và rộng theo tỉ lệ màn hình (1100–1600) để lấp kín chiều ngang; thanh HUD gọn một hàng ở trên để bàn chơi có nhiều chiều cao nhất. Bàn của các màn thấp và rộng (ví dụ 6x16). App Android khóa hướng ngang; trên trình duyệt đang dọc, `index.html` hiện lời nhắc xoay ngang thiết bị. Khi chạy `npm run dev`, cửa sổ trình duyệt cần rộng hơn cao.
+
+Bản hỗ trợ cả màn dọc lẫn màn ngang vẫn còn trong lịch sử git (commit `d66039d` trên nhánh `feature/landscape`).
 
 ### Thuật toán nối
 
@@ -91,7 +93,7 @@ Mọi đường đi tối đa 2 lần rẽ đều có dạng `a → p → q → 
 
 ## Tùy chỉnh nhanh
 
-- **Độ khó, số màn:** sửa mảng `LEVELS` trong `src/game/levels.ts`. Lưu ý `rows * cols` phải là số chẵn, bàn `landscape` phải có cùng số ô, và `types` không vượt quá 40. `npm test` tự kiểm tra các điều kiện này và chơi thử mọi màn ở cả hai hướng.
+- **Độ khó, số màn:** sửa mảng `LEVELS` trong `src/game/levels.ts`. Lưu ý `rows * cols` phải là số chẵn, bàn nên rộng hơn cao (`cols > rows`), và `types` không vượt quá 40. `npm test` tự kiểm tra các điều kiện này và chơi thử hết mọi màn.
 - **Điểm, số lượt gợi ý/đảo, thưởng thời gian:** các hằng số đầu file `GameScene.ts`.
 - **Màu sắc giao diện:** đối tượng `C` trong `src/scenes/ui.ts`.
 - **Dùng hình ảnh thật thay cho hình vẽ bằng code:** thêm hàm `preload()` vào `MenuScene` (scene chạy đầu tiên) và load ảnh với key `tile-1`, `tile-2`, ... (ví dụ `this.load.image('tile-1', 'assets/apple.png')`), sau đó bỏ các lời gọi `createTileTextures` trong `MenuScene` và `GameScene`. Ảnh nên là hình vuông, kích thước khoảng 128x128.
