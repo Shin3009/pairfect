@@ -74,6 +74,7 @@ src/
     tileArt.ts          Vẽ hình cho ô và đá bằng code (tạm thời, thay bằng ảnh thật sau)
   scenes/
     ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
+    icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn) và Đảo bàn (mũi tên bắt chéo) bằng code
     MenuScene.ts        Màn hình chính: Chơi (luôn từ màn 1), Cách chơi
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua
 ```

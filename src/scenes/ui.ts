@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { iconTexture, type IconName } from './icons';
 
 /**
  * Game chỉ chơi màn ngang. Kích thước logic cao GAME_H, rộng theo tỉ lệ màn hình để lấp kín chiều ngang
@@ -40,6 +41,7 @@ export const C = {
   path: 0xffe066,
   select: 0xffc857,
   hint: 0x7ae582,
+  badge: 0xe8505b,
   timeOk: 0x7ae582,
   timeLow: 0xe8505b,
   text: '#ffffff',
@@ -52,40 +54,45 @@ export function textStyle(size: number, color: string, weight = 'normal'): Phase
   return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: weight, resolution: 2 };
 }
 
+/** Vùng chạm của nút. Chặn sự kiện để cú chạm không lọt xuống bàn chơi bên dưới. */
+function tapZone(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  depth: number,
+  onTap: () => void,
+): Phaser.GameObjects.Zone {
+  const zone = scene.add.zone(x, y, w, h).setInteractive({ useHandCursor: true }).setDepth(depth);
+  zone.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+    e.stopPropagation();
+    onTap();
+  });
+  return zone;
+}
+
 /** Nút bấm đơn giản: nền bo góc + chữ. */
 export class Button {
   private bg: Phaser.GameObjects.Graphics;
   private label: Phaser.GameObjects.Text;
   private zone: Phaser.GameObjects.Zone;
-  private enabled = true;
 
   constructor(
     scene: Phaser.Scene,
-    private x: number,
-    private y: number,
-    private w: number,
-    private h: number,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
     text: string,
     onClick: () => void,
     depth = 1,
     fontSize = 28,
   ) {
     this.bg = scene.add.graphics().setDepth(depth);
+    this.bg.fillStyle(C.accent, 1).fillRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
     this.label = scene.add.text(x, y, text, textStyle(fontSize, C.textDark, 'bold')).setOrigin(0.5).setDepth(depth);
-    this.zone = scene.add.zone(x, y, w, h).setInteractive({ useHandCursor: true }).setDepth(depth);
-    this.zone.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-      e.stopPropagation();
-      if (this.enabled) onClick();
-    });
-    this.draw();
-  }
-
-  setLabel(text: string, enabled: boolean): void {
-    this.label.setText(text);
-    // Chữ dài hơn nút (vd. số lượt Gợi ý cộng dồn lớn) thì thu nhỏ cho vừa
-    this.label.setScale(Math.min(1, (this.w - 16) / this.label.width));
-    this.enabled = enabled;
-    this.draw();
+    this.zone = tapZone(scene, x, y, w, h, depth, onClick);
   }
 
   destroy(): void {
@@ -93,12 +100,62 @@ export class Button {
     this.label.destroy();
     this.zone.destroy();
   }
+}
 
-  private draw(): void {
+/** Nút vuông bo góc nhẹ có biểu tượng, kèm huy hiệu số lượt còn lại ở góc trên bên phải. */
+export class IconButton {
+  private bg: Phaser.GameObjects.Graphics;
+  private icon: Phaser.GameObjects.Image;
+  private badge: Phaser.GameObjects.Graphics;
+  private count: Phaser.GameObjects.Text;
+  private zone: Phaser.GameObjects.Zone;
+  private enabled = true;
+
+  constructor(
+    scene: Phaser.Scene,
+    private x: number,
+    private y: number,
+    private size: number,
+    icon: IconName,
+    onClick: () => void,
+    depth = 1,
+  ) {
+    this.bg = scene.add.graphics().setDepth(depth);
+    this.icon = scene.add
+      .image(x, y, iconTexture(scene, icon))
+      .setDisplaySize(size * 0.64, size * 0.64)
+      .setTint(C.bg) // cùng màu chữ trên nút (C.textDark)
+      .setDepth(depth);
+    this.badge = scene.add.graphics().setDepth(depth);
+    this.count = scene.add.text(0, 0, '', textStyle(15, C.text, 'bold')).setOrigin(0.5).setDepth(depth);
+    this.zone = tapZone(scene, x, y, size, size, depth, () => this.enabled && onClick());
+  }
+
+  setCount(n: number, enabled: boolean): void {
+    this.enabled = enabled;
+    const s = this.size;
     this.bg.clear();
-    this.bg.fillStyle(this.enabled ? C.accent : C.disabled, 1);
-    this.bg.fillRoundedRect(this.x - this.w / 2, this.y - this.h / 2, this.w, this.h, this.h / 2);
-    this.label.setAlpha(this.enabled ? 1 : 0.6);
+    this.bg.fillStyle(enabled ? C.accent : C.disabled, 1);
+    this.bg.fillRoundedRect(this.x - s / 2, this.y - s / 2, s, s, 10);
+    this.icon.setAlpha(enabled ? 1 : 0.6);
+
+    // Huy hiệu hình viên thuốc giữ cố định mép phải, số nhiều chữ số thì dài sang trái đè lên góc nút.
+    // Lượt cộng dồn qua nhiều màn có thể rất lớn: thu nhỏ chữ để huy hiệu không quá rộng.
+    this.count.setText(String(n));
+    this.count.setScale(Math.min(1, 22 / this.count.width));
+    const h = 20;
+    const w = Math.max(h, this.count.displayWidth + 10);
+    const right = this.x + s / 2 + 6;
+    const top = this.y - s / 2 - 6;
+    this.badge.clear();
+    this.badge.fillStyle(enabled ? C.badge : C.disabled, 1).fillRoundedRect(right - w, top, w, h, h / 2);
+    // Viền màu nền HUD tách huy hiệu khỏi nút
+    this.badge.lineStyle(2, C.panel, 1).strokeRoundedRect(right - w, top, w, h, h / 2);
+    this.count.setPosition(right - w / 2, top + h / 2);
+  }
+
+  destroy(): void {
+    for (const o of [this.bg, this.icon, this.badge, this.count, this.zone]) o.destroy();
   }
 }
 

@@ -53,7 +53,8 @@ The code is split into a pure logic layer and a rendering layer:
   - When a match leaves no move, `autoShuffle` spends one of the player's Shuffles. With none left, the level is lost ("Hết nước đi!"), the same way as running out of time.
 - **`src/scenes/GameScene.ts`** holds all gameplay: rendering, input, tweens, the HUD, the timer, pause, and the win/lose dialogs. Tuning constants sit at the top of the file: hints and shuffles per level, score per pair, and time bonus.
   - Pausing sets `this.time.paused` and `this.tweens.paused` and shows a dialog in the same scene. Phaser keeps both flags when a scene restarts, so `create()` clears them with `setPaused(false)`. Any new way into or out of the scene must not leave them set.
-- **`src/scenes/ui.ts`** holds shared UI: the sizing helpers (`GAME_H`, `GAME_MIN_W` / `GAME_MAX_W`, `sizeFor`, `onGameResize`), the color palette `C`, `textStyle`, `Button`, and `showDialog`.
+- **`src/scenes/ui.ts`** holds shared UI: the sizing helpers (`GAME_H`, `GAME_MIN_W` / `GAME_MAX_W`, `sizeFor`, `onGameResize`), the color palette `C`, `textStyle`, `Button`, `IconButton`, and `showDialog`.
+  - **`src/scenes/icons.ts`** draws button icons with the Canvas 2D API on a 24×24 grid, in white, under the keys `icon-<name>`. `iconTexture(scene, name)` creates a texture on first use, and `IconButton` tints it.
   - `showDialog` adds a full-screen interactive shade that blocks taps underneath, and returns a function that closes it.
   - It shrinks the body font until the dialog fits the 720-high screen.
 - **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores only the high score (`pairfect-best`).
@@ -82,6 +83,7 @@ The code is split into a pure logic layer and a rendering layer:
     - Positions come from measured text widths, and the time bar fills the leftover width.
     - The score has a fixed slot (`SCORE_W`) on the right, so the bar doesn't move as the score grows.
     - The rotate-gravity arrow is a separate text object, so it can update without shifting the buttons.
+    - Hint (light bulb) and Shuffle (crossed arrows) are square `IconButton`s, the same `HUD_BTN` size as Pause. The remaining count sits in a badge on the top-right corner that overhangs the button, so leave a wider gap after each one. `IconButton.setCount` redraws the badge and the enabled state.
     - The high score is deliberately not shown in the HUD (a leaderboard is planned); the menu still shows it.
   - `GameScene.relayout()` keeps all state. It snaps sprites to their final positions and textures, rebuilds the HUD (every HUD object goes through `keep()` into `this.hud`), and reopens the current dialog (always open dialogs through `openDialog`).
 - **Portrait viewports.** These only happen in a browser, since Android is locked to landscape. `index.html` covers the game with a CSS "rotate your device" overlay (`@media (orientation: portrait)`), and the game keeps running underneath at the 1100 minimum width.

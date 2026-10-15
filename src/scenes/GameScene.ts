@@ -3,14 +3,17 @@ import { Board, same, type Gravity, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, textureFor, TEXTURE_SIZE } from '../game/tileArt';
 import { saveBest } from '../game/storage';
-import { Button, C, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
+import { Button, C, IconButton, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
 /**
  * Thanh HUD mỏng một hàng phía trên, nhường tối đa chiều cao cho bàn chơi:
  * [Màn][Kiểu dồn][Gợi ý][Đảo bàn][Dừng][Thanh thời gian][Điểm].
+ * Gợi ý (bóng đèn) và Đảo bàn (mũi tên bắt chéo) là nút biểu tượng, số lượt còn lại hiện ở huy hiệu góc nút.
  * Kỷ lục không hiện trong HUD (vẫn được lưu, hiện ở menu).
  */
 const HUD_H = 80;
+/** Cạnh các nút vuông trên HUD. */
+const HUD_BTN = 44;
 /** Chỗ dành sẵn cho điểm ở góc phải, để thanh thời gian không co giãn khi điểm tăng. */
 const SCORE_W = 160;
 const MARGIN = 12;
@@ -78,8 +81,8 @@ export class GameScene extends Phaser.Scene {
   private gravityArrow: Phaser.GameObjects.Text | null = null;
   private timeBar!: Phaser.GameObjects.Graphics;
   private timeBarRect!: Rect;
-  private hintBtn!: Button;
-  private shuffleBtn!: Button;
+  private hintBtn!: IconButton;
+  private shuffleBtn!: IconButton;
   private toastText!: Phaser.GameObjects.Text;
   private dialog: { opts: DialogOptions; close: () => void } | null = null;
 
@@ -231,12 +234,13 @@ export class GameScene extends Phaser.Scene {
       x += 6 + 24;
     }
     x += 20;
-    this.hintBtn = keep(new Button(this, x + 65, cy, 130, 44, '', () => this.useHint(), 1, 22));
-    x += 130 + 10;
-    this.shuffleBtn = keep(new Button(this, x + 75, cy, 150, 44, '', () => this.useShuffle(), 1, 22));
-    x += 150 + 10;
-    keep(new Button(this, x + 22, cy, 44, 44, 'II', () => this.pause(), 1, 22));
-    x += 44 + 20;
+    // Huy hiệu số lượt nhô ra mép phải nút Gợi ý / Đảo bàn, nên chừa khoảng cách rộng hơn
+    this.hintBtn = keep(new IconButton(this, x + HUD_BTN / 2, cy, HUD_BTN, 'hint', () => this.useHint()));
+    x += HUD_BTN + 16;
+    this.shuffleBtn = keep(new IconButton(this, x + HUD_BTN / 2, cy, HUD_BTN, 'shuffle', () => this.useShuffle()));
+    x += HUD_BTN + 16;
+    keep(new Button(this, x + HUD_BTN / 2, cy, HUD_BTN, HUD_BTN, 'II', () => this.pause(), 1, 22));
+    x += HUD_BTN + 20;
 
     this.scoreText = keep(this.add.text(W - 32, cy, '', textStyle(28, C.text, 'bold')).setOrigin(1, 0.5));
     this.timeBar = keep(this.add.graphics());
@@ -262,8 +266,8 @@ export class GameScene extends Phaser.Scene {
     this.scoreText.setScale(Math.min(1, SCORE_W / this.scoreText.width));
     // Xoay vòng: mũi tên chỉ hướng dồn ở lần ăn cặp tới
     this.gravityArrow?.setText(ARROW[gravityFor(this.cfg.gravity, this.matches)] ?? '');
-    this.hintBtn.setLabel(`Gợi ý (${this.hints})`, this.hints > 0);
-    this.shuffleBtn.setLabel(`Đảo bàn (${this.shuffles})`, this.shuffles > 0);
+    this.hintBtn.setCount(this.hints, this.hints > 0);
+    this.shuffleBtn.setCount(this.shuffles, this.shuffles > 0);
     this.drawTimeBar();
   }
 

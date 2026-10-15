@@ -8,7 +8,7 @@ const HOW_TO_PLAY = [
   'Chạm hai ô có hình giống nhau để nối và xóa chúng.',
   'Đường nối chỉ đi qua ô trống, rẽ tối đa 2 lần và được vòng ra ngoài mép bàn.',
   'Xóa hết các cặp trước khi hết giờ. Mỗi cặp được cộng thêm 1 giây.',
-  'Gợi ý chỉ ra một cặp nối được, Đảo bàn xáo lại các ô còn lại.',
+  'Nút bóng đèn (Gợi ý) chỉ ra một cặp nối được, nút mũi tên bắt chéo (Đảo bàn) xáo lại các ô còn lại.',
   `Từ màn ${HARD_START + 1} có đá chắn đường; khi bàn bế tắc, đá sẽ vỡ để mở đường.`,
 ].join('\n\n');
 
