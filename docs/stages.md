@@ -141,7 +141,8 @@ Kiểu dồn hai hướng làm các ô di chuyển nhiều hơn sau mỗi lần 
 
 - **Luôn bắt đầu từ màn 1.** Không có màn hình chọn màn. Nút "Chơi" ở menu luôn bắt đầu lượt chơi mới từ màn 1 với 0 điểm. Các màn sau chỉ đến được bằng cách chơi tiếp qua nút "Màn tiếp theo".
 - **Hết giờ.** Nút "Chơi lại" bắt đầu lại **đúng số màn đó**, giữ nguyên vòng và thời gian đã giảm, với điểm về 0. Chơi lại từ menu tạm dừng cũng vậy.
-- **Kỷ lục.** Điểm cao nhất ("Kỷ lục") được lưu với khóa `pairfect-best` khi qua màn, khi hết giờ, hoặc khi rời màn từ menu tạm dừng.
+- **Bảng xếp hạng.** Chỉ ghi khi thua (hết giờ hoặc hết nước đi): điểm cuối cùng của lượt chơi và màn đang chơi lúc thua, lưu với khóa `pairfect-leaderboard`, giữ 10 lượt cao nhất. Bỏ cuộc (rời màn từ menu tạm dừng, hoặc về menu sau khi qua màn) thì không ghi.
+- **Kỷ lục.** "Kỷ lục" ở menu là điểm cao nhất trên bảng xếp hạng, nên điểm của lượt bỏ cuộc cũng không tính vào kỷ lục.
 
 ## Chỉnh sửa các màn
 

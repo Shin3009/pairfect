@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Board, same, type Gravity, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, textureFor, TEXTURE_SIZE } from '../game/tileArt';
-import { saveBest } from '../game/storage';
+import { addToLeaderboard } from '../game/storage';
 import { onBack, onSuspend } from '../native';
 import { Button, C, IconButton, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
@@ -10,7 +10,7 @@ import { Button, C, IconButton, onGameResize, showDialog, textStyle, type Dialog
  * Thanh HUD mỏng một hàng phía trên, nhường tối đa chiều cao cho bàn chơi:
  * [Màn][Kiểu dồn][Gợi ý][Đảo bàn][Dừng][Thanh thời gian][Điểm].
  * Gợi ý (bóng đèn) và Đảo bàn (mũi tên bắt chéo) là nút biểu tượng, số lượt còn lại hiện ở huy hiệu góc nút.
- * Kỷ lục không hiện trong HUD (vẫn được lưu, hiện ở menu).
+ * Kỷ lục (điểm cao nhất trên bảng xếp hạng) không hiện trong HUD, chỉ hiện ở menu.
  */
 const HUD_H = 80;
 /** Cạnh các nút vuông trên HUD. */
@@ -498,7 +498,6 @@ export class GameScene extends Phaser.Scene {
     this.ended = true;
     const bonus = Math.ceil(this.timeLeft) * 2;
     this.score += bonus;
-    saveBest(this.score);
     this.refreshHud();
     this.openDialog({
       title: 'Qua màn!',
@@ -523,13 +522,19 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Thua màn (hết giờ / hết nước đi) là kết thúc lượt chơi, nên ghi lên bảng xếp hạng. */
   private loseLevel(title: string, reason?: string): void {
+    if (this.ended) return;
     this.ended = true;
     this.select(null);
-    saveBest(this.score);
+    // Bỏ cuộc (rời màn từ menu tạm dừng, về menu sau khi qua màn) thì không ghi
+    const rank = addToLeaderboard(this.score, this.levelIndex + 1);
     this.openDialog({
       title,
-      body: (reason ? `${reason}\n` : '') + `Bạn đạt ${this.score} điểm`,
+      body:
+        (reason ? `${reason}\n` : '') +
+        `Bạn đạt ${this.score} điểm` +
+        (rank ? `\nHạng ${rank} trên bảng xếp hạng!` : ''),
       actions: [
         { label: 'Chơi lại', onClick: () => this.scene.restart({ level: this.levelIndex, score: 0 }) },
         { label: 'Về menu', onClick: () => this.scene.start('Menu') },
@@ -566,8 +571,9 @@ export class GameScene extends Phaser.Scene {
       shade: 0.92, // che gần kín bàn chơi để không xem trước nước đi khi đang dừng
       actions: [
         { label: 'Tiếp tục', onClick: () => this.resume() },
-        { label: 'Chơi lại màn', onClick: () => this.leave({ level: this.levelIndex, score: 0 }) },
-        { label: 'Về menu', onClick: () => this.leave() },
+        // Rời màn đang chơi dở là bỏ cuộc: không ghi lên bảng xếp hạng
+        { label: 'Chơi lại màn', onClick: () => this.scene.restart({ level: this.levelIndex, score: 0 }) },
+        { label: 'Về menu', onClick: () => this.scene.start('Menu') },
       ],
       back: () => this.resume(),
     });
@@ -576,12 +582,5 @@ export class GameScene extends Phaser.Scene {
   private resume(): void {
     this.closeDialog();
     this.setPaused(false);
-  }
-
-  /** Rời màn đang chơi dở: lưu kỷ lục rồi chơi lại màn (có `restart`) hoặc về menu. */
-  private leave(restart?: SceneData): void {
-    saveBest(this.score);
-    if (restart) this.scene.restart(restart);
-    else this.scene.start('Menu');
   }
 }

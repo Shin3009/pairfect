@@ -71,20 +71,24 @@ src/
     Board.test.ts       Unit test cho logic
     levels.ts           Cấu hình các màn, vòng lặp vô tận và giai đoạn khó (xem docs/stages.md)
     levels.test.ts      Unit test cho cấu hình màn, tự chơi thử mọi màn
-    storage.ts          Lưu kỷ lục điểm vào localStorage
+    storage.ts          Lưu bảng xếp hạng vào localStorage (kỷ lục là điểm cao nhất trên bảng)
+    storage.test.ts     Unit test cho bảng xếp hạng
     tileArt.ts          Vẽ hình cho ô và đá bằng code (tạm thời, thay bằng ảnh thật sau)
   scenes/
     ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
     icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn) và Đảo bàn (mũi tên bắt chéo) bằng code
-    MenuScene.ts        Màn hình chính: Chơi (luôn từ màn 1), Cách chơi
+    MenuScene.ts        Màn hình chính: Chơi (luôn từ màn 1), Bảng xếp hạng, Cách chơi
+    LeaderboardScene.ts Bảng xếp hạng: 10 lượt chơi điểm cao nhất, kèm màn lúc thua và ngày chơi
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua
 ```
 
 `Board.ts` không phụ thuộc Phaser nên có thể test riêng hoặc tái sử dụng.
 
-Luồng màn hình: `Menu` → `Game`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
+Luồng màn hình: `Menu` → `Game`, và `Menu` → `Leaderboard`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
 
-Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu (ở hộp thoại qua màn thì không làm gì, để lỡ tay không mất lượt chơi đang thắng); ở menu thì đóng hộp thoại đang mở, hoặc hỏi có thoát game không.
+Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu (ở hộp thoại qua màn thì không làm gì, để lỡ tay không mất lượt chơi đang thắng); ở bảng xếp hạng thì về menu; ở menu thì đóng hộp thoại đang mở, hoặc hỏi có thoát game không.
+
+Bảng xếp hạng chỉ lưu trên máy (localStorage), giữ 10 lượt chơi điểm cao nhất. Một lượt chơi được ghi khi **thua** (hết giờ hoặc hết nước đi), với điểm cuối cùng và màn đang chơi lúc thua; hộp thoại thua báo hạng nếu lọt vào bảng. Bỏ cuộc thì không ghi: rời màn từ menu tạm dừng (Chơi lại màn / Về menu), hoặc về menu sau khi qua màn. Bằng điểm thì màn xa hơn xếp trên, vẫn bằng thì lượt chơi trước xếp trên. "Kỷ lục" ở menu là điểm cao nhất trên bảng.
 
 ### Chỉ chơi màn ngang
 

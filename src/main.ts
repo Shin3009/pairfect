@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { bindAppEvents } from './native';
 import { GameScene } from './scenes/GameScene';
+import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { MenuScene } from './scenes/MenuScene';
 import { sizeFor } from './scenes/ui';
 
@@ -19,7 +20,7 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   // Scene đầu tiên trong danh sách được chạy khi mở game
-  scene: [MenuScene, GameScene],
+  scene: [MenuScene, GameScene, LeaderboardScene],
 });
 
 // Tỉ lệ màn hình đổi (chia đôi màn hình, kéo cửa sổ): đổi chiều rộng logic cho khớp.

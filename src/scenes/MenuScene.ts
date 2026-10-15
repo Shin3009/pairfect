@@ -43,8 +43,9 @@ export class MenuScene extends Phaser.Scene {
     this.add.text(x, 245, 'Tile Connect', textStyle(40, C.textAccent, 'bold')).setOrigin(0.5);
     this.add.text(x, 305, `Kỷ lục: ${loadBest()}`, textStyle(30, C.textDim)).setOrigin(0.5);
 
-    new Button(this, x, 450, 420, 100, 'Chơi', () => this.scene.start('Game', { level: 0, score: 0 }), 1, 40);
-    new Button(this, x, 570, 420, 84, 'Cách chơi', () => this.showHowToPlay(), 1, 32);
+    new Button(this, x, 420, 420, 96, 'Chơi', () => this.scene.start('Game', { level: 0, score: 0 }), 1, 40);
+    new Button(this, x, 530, 420, 80, 'Bảng xếp hạng', () => this.scene.start('Leaderboard'), 1, 32);
+    new Button(this, x, 630, 420, 80, 'Cách chơi', () => this.showHowToPlay(), 1, 32);
   }
 
   private showHowToPlay(): void {
