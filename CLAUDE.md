@@ -47,15 +47,15 @@ The code is split into a pure logic layer and a rendering layer:
 - **Stones** (`STONE = -1` in the grid) are fixed blockers. Any grid value `<= 0` is "not a tile": stones can't be selected or matched, block paths, are never shuffled or moved, and split compaction into segments so tiles stop against them. `remaining()` / `isCleared()` count tiles only.
   - `generate` never places two stones within one cell of each other, including diagonally, so no cell can be walled in.
   - If a stuck board can't be fixed by reshuffling, `shuffle()` breaks random stones until a move exists and returns their positions. `GameScene.breakStones` animates them away.
-- **Scenes** run in the order `Menu` → `Levels` (stage select, optional) → `Game`, and are registered in `main.ts`; the first in the list starts on launch. Scenes switch with `this.scene.start(key, data)`. `Game` takes `{ level, score, hints, shuffles }` (`SceneData`) and moves to the next level with `this.scene.restart(...)`.
-  - Hints and shuffles carry over like score: the next level gets the unused ones plus `HINTS_PER_LEVEL` / `SHUFFLES_PER_LEVEL`. Every way of starting a fresh run (menu, stage select, retry) omits them, so the player gets the base 3.
+- **Scenes** run in the order `Menu` → `Game`, and are registered in `main.ts`; the first in the list starts on launch. There is deliberately no stage select: every run starts at stage 1 (the old `LevelSelectScene` and its `pairfect-unlocked` progress were removed). Scenes switch with `this.scene.start(key, data)`. `Game` takes `{ level, score, hints, shuffles }` (`SceneData`) and moves to the next level with `this.scene.restart(...)`.
+  - Hints and shuffles carry over like score: the next level gets the unused ones plus `HINTS_PER_LEVEL` / `SHUFFLES_PER_LEVEL`. Every way of starting a fresh run (menu, retry) omits them, so the player gets the base 3.
   - When a match leaves no move, `autoShuffle` spends one of the player's Shuffles. With none left, the level is lost ("Hết nước đi!"), the same way as running out of time.
 - **`src/scenes/GameScene.ts`** holds all gameplay: rendering, input, tweens, the HUD, the timer, pause, and the win/lose dialogs. Tuning constants sit at the top of the file: hints and shuffles per level, score per pair, and time bonus.
   - Pausing sets `this.time.paused` and `this.tweens.paused` and shows a dialog in the same scene. Phaser keeps both flags when a scene restarts, so `create()` clears them with `setPaused(false)`. Any new way into or out of the scene must not leave them set.
 - **`src/scenes/ui.ts`** holds shared UI: the sizing helpers (`GAME_H`, `GAME_MIN_W` / `GAME_MAX_W`, `sizeFor`, `onGameResize`), the color palette `C`, `textStyle`, `Button`, and `showDialog`.
   - `showDialog` adds a full-screen interactive shade that blocks taps underneath, and returns a function that closes it.
   - It shrinks the body font until the dialog fits the 720-high screen.
-- **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores the high score (`pairfect-best`) and the highest unlocked level index (`pairfect-unlocked`). Clearing level `i` unlocks `i + 1`, and the stage-select screen treats every index up to that value as open.
+- **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores only the high score (`pairfect-best`).
 - **`src/game/levels.ts`** defines the `LEVELS` array: `rows`, `cols` (wide, short boards that grow to a maximum of 7×20), `types`, gravity mode and time for each level. After the last level, `getLevel(i)` continues endlessly:
   - The board and `types` stay those of the last level.
   - The gravity cycles through the levels' gravities in order.
@@ -76,7 +76,7 @@ The code is split into a pure logic layer and a rendering layer:
 - **Game size.** The logical height is fixed at 720. The width follows the viewport aspect ratio, clamped to 1100–1600, so the canvas fills the screen width; it's scaled with `Scale.FIT`.
   - `main.ts` recomputes the size via `sizeFor` on window resize (debounced) and calls `game.scale.setGameSize` when it changes.
   - Scenes lay out X positions relative to `this.scale.width`, because the width varies. Y positions can assume 720.
-  - Each scene registers `onGameResize` in `create()`. Menu and stage select simply restart.
+  - Each scene registers `onGameResize` in `create()`. The menu simply restarts.
   - The game HUD is a thin one-row top bar (`HUD_H` = 80), because height is what limits tile size. It's laid out left to right as stage, gravity, Hint, Shuffle, Pause, time bar, score.
     - Positions come from measured text widths, and the time bar fills the leftover width.
     - The score has a fixed slot (`SCORE_W`) on the right, so the bar doesn't move as the score grows.

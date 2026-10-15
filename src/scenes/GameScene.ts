@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Board, same, type Gravity, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, textureFor, TEXTURE_SIZE } from '../game/tileArt';
-import { saveBest, unlockLevel } from '../game/storage';
+import { saveBest } from '../game/storage';
 import { Button, C, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
 /**
@@ -490,7 +490,6 @@ export class GameScene extends Phaser.Scene {
     const bonus = Math.ceil(this.timeLeft) * 2;
     this.score += bonus;
     saveBest(this.score);
-    unlockLevel(this.levelIndex + 1);
     this.refreshHud();
     this.openDialog({
       title: 'Qua màn!',

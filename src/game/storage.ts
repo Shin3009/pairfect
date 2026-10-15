@@ -1,10 +1,9 @@
 /**
- * Lưu kỷ lục điểm và tiến độ mở khóa màn vào localStorage.
+ * Lưu kỷ lục điểm vào localStorage.
  * Không phụ thuộc Phaser. Mọi lỗi lưu trữ (trình duyệt chặn, chế độ ẩn danh...) đều được bỏ qua.
  */
 
 const BEST_KEY = 'pairfect-best';
-const UNLOCKED_KEY = 'pairfect-unlocked';
 
 function readNumber(key: string): number {
   try {
@@ -28,13 +27,4 @@ export function loadBest(): number {
 
 export function saveBest(score: number): void {
   if (score > loadBest()) writeNumber(BEST_KEY, score);
-}
-
-/** Chỉ số (từ 0) của màn cao nhất đã mở khóa. Màn đầu tiên luôn mở. */
-export function loadUnlocked(): number {
-  return readNumber(UNLOCKED_KEY);
-}
-
-export function unlockLevel(index: number): void {
-  if (index > loadUnlocked()) writeNumber(UNLOCKED_KEY, index);
 }

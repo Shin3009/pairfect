@@ -69,18 +69,17 @@ src/
     Board.test.ts       Unit test cho logic
     levels.ts           Cấu hình các màn, vòng lặp vô tận và giai đoạn khó (xem docs/stages.md)
     levels.test.ts      Unit test cho cấu hình màn, tự chơi thử mọi màn
-    storage.ts          Lưu kỷ lục điểm và màn đã mở khóa vào localStorage
+    storage.ts          Lưu kỷ lục điểm vào localStorage
     tileArt.ts          Vẽ hình cho ô và đá bằng code (tạm thời, thay bằng ảnh thật sau)
   scenes/
     ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
-    MenuScene.ts        Màn hình chính: Chơi, Chọn màn, Cách chơi
-    LevelSelectScene.ts Danh sách màn, qua màn trước mới mở khóa màn sau
+    MenuScene.ts        Màn hình chính: Chơi (luôn từ màn 1), Cách chơi
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua
 ```
 
 `Board.ts` không phụ thuộc Phaser nên có thể test riêng hoặc tái sử dụng.
 
-Luồng màn hình: `Menu` → (`Levels`) → `Game`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục.
+Luồng màn hình: `Menu` → `Game`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục.
 
 ### Chỉ chơi màn ngang
 

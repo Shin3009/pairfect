@@ -16,7 +16,7 @@ Toàn bộ dữ liệu màn chơi nằm trong `LEVELS` ở [`src/game/levels.ts`
   - **+3 lần Gợi ý**, mỗi lần chỉ ra một cặp nối được.
   - **+3 lần Đảo bàn**, mỗi lần xáo lại các ô còn lại vào đúng những vị trí đó.
   - Lượt chưa dùng được **cộng dồn** sang màn sau trong cùng một lượt chơi. Ví dụ qua màn 1 còn 2 Gợi ý và 2 Đảo bàn thì màn 2 có 2 + 3 = 5 Gợi ý và 5 Đảo bàn. Hộp thoại qua màn hiện số lượt mang sang.
-  - Giống điểm, lượt cộng dồn mất khi bắt đầu lượt chơi mới: chơi từ menu hay từ màn chọn màn, chơi lại sau khi hết giờ, hoặc chọn "Chơi lại màn" khi tạm dừng đều quay về 3 Gợi ý và 3 Đảo bàn.
+  - Giống điểm, lượt cộng dồn mất khi bắt đầu lượt chơi mới: chơi từ menu, chơi lại sau khi hết giờ, hoặc chọn "Chơi lại màn" khi tạm dừng đều quay về 3 Gợi ý và 3 Đảo bàn.
 - **Tự động đảo bàn tốn lượt.** Khi không còn cặp nào nối được, bàn tự xáo lại và **trừ 1 lượt Đảo bàn** của người chơi, kèm thông báo "Hết nước đi – tự dùng 1 lượt Đảo bàn". Nếu đã hết lượt Đảo bàn thì **thua màn** ngay ("Hết nước đi!"), giống như hết giờ.
 - **Cách chia loại hình.** Các cặp được chia lần lượt cho từng loại: loại 1, loại 2, … tới số loại của màn, rồi quay lại loại 1.
   - Khi số cặp đúng bằng hai lần số loại, mỗi loại có **4 ô**: 2 cặp, ghép kiểu nào cũng được.
@@ -137,10 +137,9 @@ Kiểu dồn hai hướng làm các ô di chuyển nhiều hơn sau mỗi lần 
 - Số đá tăng dần: 4 viên ở màn 43–49, mỗi vòng 7 màn thêm 2 viên, tối đa 10 viên từ màn 64. Đá chiếm chỗ nên bàn còn 136, 134, 132 rồi 130 ô hình. Vì vẫn 40 loại, số loại chỉ có một cặp tăng từ 12 lên 15.
 - **Đá vỡ:** đá có thể làm bàn bế tắc mà đảo bàn cũng không gỡ được (thường khi chỉ còn vài ô). Khi đó từng viên đá ngẫu nhiên vỡ cho tới khi có nước đi, kèm thông báo "Hết nước đi – đá vỡ để mở đường". Nhờ vậy bàn có đá luôn chơi hết được.
 
-## Tiến độ, mở khóa và chơi lại
+## Tiến độ và chơi lại
 
-- **Mở khóa.** Qua một màn sẽ mở khóa màn thiết kế sẵn tiếp theo trong màn hình "Chọn màn". Tiến độ được lưu trong `localStorage` với khóa `pairfect-unlocked`. Qua màn 7 thì cả 7 màn đều mở.
-- **Chọn màn luôn bắt đầu lượt chơi mới.** Màn được chọn chạy ở vòng 1 (đủ thời gian) với 0 điểm. Các vòng sau (từ màn 8) chỉ đến được bằng cách chơi tiếp qua nút "Màn tiếp theo".
+- **Luôn bắt đầu từ màn 1.** Không có màn hình chọn màn. Nút "Chơi" ở menu luôn bắt đầu lượt chơi mới từ màn 1 với 0 điểm. Các màn sau chỉ đến được bằng cách chơi tiếp qua nút "Màn tiếp theo".
 - **Hết giờ.** Nút "Chơi lại" bắt đầu lại **đúng số màn đó**, giữ nguyên vòng và thời gian đã giảm, với điểm về 0. Chơi lại từ menu tạm dừng cũng vậy.
 - **Kỷ lục.** Điểm cao nhất ("Kỷ lục") được lưu với khóa `pairfect-best` khi qua màn, khi hết giờ, hoặc khi rời màn từ menu tạm dừng.
 
