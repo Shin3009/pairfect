@@ -65,11 +65,12 @@ Trước khi phát hành, nên làm thêm:
 src/
   main.ts               Khởi tạo Phaser (màn ngang cao 720, rộng theo tỉ lệ màn hình)
   game/
-    Board.ts            Toàn bộ logic: sinh bàn, tìm đường nối, gợi ý, đảo bàn, dồn ô
+    Board.ts            Toàn bộ logic: sinh bàn, đá chắn, tìm đường nối, gợi ý, đảo bàn, dồn ô
     Board.test.ts       Unit test cho logic
-    levels.ts           Cấu hình các màn chơi (kích thước, số loại hình, kiểu dồn, thời gian)
+    levels.ts           Cấu hình các màn, vòng lặp vô tận và giai đoạn khó (xem docs/stages.md)
+    levels.test.ts      Unit test cho cấu hình màn, tự chơi thử mọi màn
     storage.ts          Lưu kỷ lục điểm và màn đã mở khóa vào localStorage
-    tileArt.ts          Vẽ hình cho ô bằng code (tạm thời, thay bằng ảnh thật sau)
+    tileArt.ts          Vẽ hình cho ô và đá bằng code (tạm thời, thay bằng ảnh thật sau)
   scenes/
     ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
     MenuScene.ts        Màn hình chính: Chơi, Chọn màn, Cách chơi
@@ -83,7 +84,7 @@ Luồng màn hình: `Menu` → (`Levels`) → `Game`. Trong lúc chơi, nút **I
 
 ### Chỉ chơi màn ngang
 
-Game chỉ chơi màn ngang (hướng tới tablet). Kích thước logic cao 720 và rộng theo tỉ lệ màn hình (1100–1600) để lấp kín chiều ngang; thanh HUD gọn một hàng ở trên để bàn chơi có nhiều chiều cao nhất. Bàn của các màn thấp và rộng (ví dụ 6x16). App Android khóa hướng ngang; trên trình duyệt đang dọc, `index.html` hiện lời nhắc xoay ngang thiết bị. Khi chạy `npm run dev`, cửa sổ trình duyệt cần rộng hơn cao.
+Game chỉ chơi màn ngang (hướng tới tablet). Kích thước logic cao 720 và rộng theo tỉ lệ màn hình (1100–1600) để lấp kín chiều ngang; thanh HUD gọn một hàng ở trên để bàn chơi có nhiều chiều cao nhất. Bàn của các màn thấp và rộng, lớn dần tới tối đa 7x20. App Android khóa hướng ngang; trên trình duyệt đang dọc, `index.html` hiện lời nhắc xoay ngang thiết bị. Khi chạy `npm run dev`, cửa sổ trình duyệt cần rộng hơn cao.
 
 Bản hỗ trợ cả màn dọc lẫn màn ngang vẫn còn trong lịch sử git (commit `d66039d` trên nhánh `feature/landscape`).
 
@@ -96,7 +97,7 @@ Mọi đường đi tối đa 2 lần rẽ đều có dạng `a → p → q → 
 - **Độ khó, số màn:** sửa mảng `LEVELS` trong `src/game/levels.ts`. Lưu ý `rows * cols` phải là số chẵn, bàn nên rộng hơn cao (`cols > rows`), và `types` không vượt quá 40. `npm test` tự kiểm tra các điều kiện này và chơi thử hết mọi màn.
 - **Điểm, số lượt gợi ý/đảo, thưởng thời gian:** các hằng số đầu file `GameScene.ts`.
 - **Màu sắc giao diện:** đối tượng `C` trong `src/scenes/ui.ts`.
-- **Dùng hình ảnh thật thay cho hình vẽ bằng code:** thêm hàm `preload()` vào `MenuScene` (scene chạy đầu tiên) và load ảnh với key `tile-1`, `tile-2`, ... (ví dụ `this.load.image('tile-1', 'assets/apple.png')`), sau đó bỏ các lời gọi `createTileTextures` trong `MenuScene` và `GameScene`. Ảnh nên là hình vuông, kích thước khoảng 128x128.
+- **Dùng hình ảnh thật thay cho hình vẽ bằng code:** thêm hàm `preload()` vào `MenuScene` (scene chạy đầu tiên) và load ảnh với key `tile-1`, `tile-2`, ... và `stone` cho đá (ví dụ `this.load.image('tile-1', 'assets/apple.png')`), sau đó bỏ các lời gọi `createTileTextures` trong `MenuScene` và `GameScene`. Ảnh nên là hình vuông, kích thước khoảng 128x128.
 
 Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset có giấy phép rõ ràng như CC0 từ kenney.nl), không dùng tài nguyên của game Onet gốc.
 

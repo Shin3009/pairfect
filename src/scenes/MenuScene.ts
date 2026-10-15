@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { HARD_START } from '../game/levels';
 import { loadBest } from '../game/storage';
 import { createTileTextures, MAX_TYPES, TEXTURE_SIZE, tileKey } from '../game/tileArt';
 import { Button, C, onGameResize, showDialog, textStyle } from './ui';
@@ -8,6 +9,7 @@ const HOW_TO_PLAY = [
   'Đường nối chỉ đi qua ô trống, rẽ tối đa 2 lần và được vòng ra ngoài mép bàn.',
   'Xóa hết các cặp trước khi hết giờ. Mỗi cặp được cộng thêm 1 giây.',
   'Gợi ý chỉ ra một cặp nối được, Đảo bàn xáo lại các ô còn lại.',
+  `Từ màn ${HARD_START + 1} có đá chắn đường; khi bàn bế tắc, đá sẽ vỡ để mở đường.`,
 ].join('\n\n');
 
 /**

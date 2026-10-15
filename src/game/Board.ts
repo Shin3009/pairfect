@@ -4,7 +4,7 @@
  *
  * Lưới được bao thêm một viền ô trống (padding) quanh bàn chơi,
  * nên đường nối có thể đi vòng ra ngoài mép mà không cần xử lý riêng.
- * Ô thật nằm ở hàng 1..rows, cột 1..cols. Giá trị 0 = ô trống.
+ * Ô thật nằm ở hàng 1..rows, cột 1..cols. Giá trị 0 = ô trống, STONE = đá, số dương = loại hình.
  */
 
 export interface Point {
@@ -17,8 +17,30 @@ export interface Move {
   to: Point;
 }
 
-/** Kiểu dồn ô sau mỗi lần ăn cặp (giống các màn của Onet). */
-export type Gravity = 'none' | 'down' | 'up' | 'left' | 'right' | 'center-h' | 'center-v';
+/** Đá chắn đường: không chọn, không xóa, không di chuyển; chặn đường nối và chặn ô khi dồn. */
+export const STONE = -1;
+
+/** Một lần dồn theo một hướng (giống các màn của Onet). */
+type Direction = 'down' | 'up' | 'left' | 'right' | 'center-h' | 'center-v';
+
+/** Kiểu dồn ô sau mỗi lần ăn cặp: không dồn, một hướng, hoặc hai hướng liên tiếp (về góc / về tâm). */
+export type Gravity = 'none' | Direction | 'down-left' | 'down-right' | 'up-left' | 'up-right' | 'center';
+
+/** Các bước dồn của từng kiểu, chạy lần lượt. */
+const GRAVITY_STEPS: Record<Gravity, Direction[]> = {
+  none: [],
+  down: ['down'],
+  up: ['up'],
+  left: ['left'],
+  right: ['right'],
+  'center-h': ['center-h'],
+  'center-v': ['center-v'],
+  'down-left': ['down', 'left'],
+  'down-right': ['down', 'right'],
+  'up-left': ['up', 'left'],
+  'up-right': ['up', 'right'],
+  center: ['center-v', 'center-h'],
+};
 
 export type Rng = () => number;
 
@@ -38,17 +60,20 @@ export class Board {
   }
 
   /**
-   * Sinh bàn chơi ngẫu nhiên với `types` loại hình.
+   * Sinh bàn chơi ngẫu nhiên với `types` loại hình và `stones` viên đá (số chẵn).
    * Mỗi loại xuất hiện số chẵn lần; bảo đảm có ít nhất một nước đi.
    */
-  generate(types: number): void {
-    const total = this.rows * this.cols;
+  generate(types: number, stones = 0): void {
+    for (const row of this.grid) row.fill(0);
+    this.placeStones(stones);
+    const free = this.allInnerPositions().filter((p) => this.get(p) === 0);
+    if (free.length % 2 !== 0) throw new Error('Số ô (trừ đá) phải là số chẵn');
     const tiles: number[] = [];
-    for (let i = 0; i < total / 2; i++) {
+    for (let i = 0; i < free.length / 2; i++) {
       const t = (i % types) + 1;
       tiles.push(t, t);
     }
-    this.fillPositions(this.allInnerPositions(), tiles);
+    this.fillPositions(free, tiles);
     this.ensurePlayable();
   }
 
@@ -60,11 +85,9 @@ export class Board {
     return p.r >= 1 && p.r <= this.rows && p.c >= 1 && p.c <= this.cols;
   }
 
+  /** Số ô hình còn lại (không tính đá). */
   remaining(): number {
-    let n = 0;
-    for (let r = 1; r <= this.rows; r++)
-      for (let c = 1; c <= this.cols; c++) if (this.grid[r][c] !== 0) n++;
-    return n;
+    return this.tilePositions().length;
   }
 
   isCleared(): boolean {
@@ -83,8 +106,9 @@ export class Board {
   findPath(a: Point, b: Point): Point[] | null {
     if (same(a, b)) return null;
     const va = this.get(a);
-    if (va === 0 || va !== this.get(b)) return null;
+    if (va <= 0 || va !== this.get(b)) return null;
 
+    // Đá và ô hình khác đều chặn đường
     const passable = (p: Point) => this.grid[p.r][p.c] === 0 || same(p, a) || same(p, b);
     const clear = (p1: Point, p2: Point) => segmentCells(p1, p2).every(passable);
 
@@ -110,13 +134,11 @@ export class Board {
   /** Tìm một cặp nối được bất kỳ (dùng cho Gợi ý và kiểm tra bế tắc). */
   findAnyMove(): [Point, Point] | null {
     const byType = new Map<number, Point[]>();
-    for (let r = 1; r <= this.rows; r++)
-      for (let c = 1; c <= this.cols; c++) {
-        const v = this.grid[r][c];
-        if (v === 0) continue;
-        if (!byType.has(v)) byType.set(v, []);
-        byType.get(v)!.push({ r, c });
-      }
+    for (const p of this.tilePositions()) {
+      const v = this.get(p);
+      if (!byType.has(v)) byType.set(v, []);
+      byType.get(v)!.push(p);
+    }
     for (const list of byType.values())
       for (let i = 0; i < list.length; i++)
         for (let j = i + 1; j < list.length; j++)
@@ -136,24 +158,33 @@ export class Board {
   }
 
   /**
-   * Xáo trộn các ô còn lại (giữ nguyên vị trí các ô đang có hình),
-   * bảo đảm sau khi xáo vẫn còn nước đi.
+   * Xáo trộn các ô hình còn lại (giữ nguyên vị trí các ô đang có hình, đá đứng yên),
+   * bảo đảm sau khi xáo vẫn còn nước đi. Trả về các viên đá bị phá để gỡ bế tắc.
    */
-  shuffle(): void {
-    const positions = this.occupiedPositions();
+  shuffle(): Point[] {
+    const positions = this.tilePositions();
     const values = positions.map((p) => this.get(p));
     this.fillPositions(positions, values);
-    this.ensurePlayable();
+    return this.ensurePlayable();
   }
 
+  /**
+   * Dồn ô theo `gravity`. Kiểu hai hướng chạy lần lượt từng bước, nên một ô có thể đi hai chặng;
+   * danh sách trả về đã gộp lại để mỗi ô chỉ có một nước đi từ vị trí cũ tới vị trí mới.
+   */
   applyGravity(gravity: Gravity): Move[] {
     const moves: Move[] = [];
+    for (const dir of GRAVITY_STEPS[gravity]) this.applyDirection(dir, moves);
+    return mergeMoves(moves);
+  }
+
+  private applyDirection(dir: Direction, moves: Move[]): void {
     const R = this.rows;
     const C = this.cols;
     const col = (c: number, from: number, to: number) => line(from, to).map((r) => ({ r, c }));
     const row = (r: number, from: number, to: number) => line(from, to).map((c) => ({ r, c }));
 
-    switch (gravity) {
+    switch (dir) {
       case 'down':
         for (let c = 1; c <= C; c++) this.compact(col(c, R, 1), moves);
         break;
@@ -182,41 +213,69 @@ export class Board {
         }
         break;
       }
-      case 'none':
-        break;
     }
-    return moves;
   }
 
-  /** Dồn các ô có hình về phía đầu danh sách `positions`. */
+  /**
+   * Dồn các ô có hình về phía đầu danh sách `positions`.
+   * Đá đứng yên và chia danh sách thành từng đoạn: ô dồn sát vào đá như dồn sát vào mép bàn.
+   */
   private compact(positions: Point[], moves: Move[]): void {
     let target = 0;
-    for (const p of positions) {
+    positions.forEach((p, i) => {
       const v = this.get(p);
-      if (v === 0) continue;
+      if (v === STONE) {
+        target = i + 1;
+        return;
+      }
+      if (v === 0) return;
       const t = positions[target++];
       if (!same(p, t)) {
         this.grid[t.r][t.c] = v;
         this.grid[p.r][p.c] = 0;
         moves.push({ from: p, to: t });
       }
-    }
+    });
   }
 
-  private ensurePlayable(): void {
-    const positions = this.occupiedPositions();
-    if (positions.length === 0) return;
-    for (let attempt = 0; attempt < 200 && !this.hasMove(); attempt++) {
-      this.fillPositions(positions, positions.map((p) => this.get(p)));
+  /**
+   * Đặt đá ngẫu nhiên. Hai viên đá không được kề nhau (kể cả chéo), nên mỗi ô có tối đa
+   * hai cạnh giáp đá và hai cạnh đó đối diện nhau: không ô nào bị đá vây kín.
+   */
+  private placeStones(count: number): void {
+    const chosen: Point[] = [];
+    for (const p of shuffled(this.allInnerPositions(), this.rng)) {
+      if (chosen.length === count) break;
+      if (chosen.some((s) => Math.abs(s.r - p.r) <= 1 && Math.abs(s.c - p.c) <= 1)) continue;
+      chosen.push(p);
+    }
+    if (chosen.length < count) throw new Error('Không đủ chỗ đặt đá');
+    for (const p of chosen) this.grid[p.r][p.c] = STONE;
+  }
+
+  /**
+   * Bảo đảm còn nước đi: xáo lại tối đa 200 lần. Nếu vẫn bế tắc (đá chặn đường mà xáo không gỡ được,
+   * ví dụ khi chỉ còn vài ô) thì phá từng viên đá ngẫu nhiên rồi thử lại. Trả về các viên đá bị phá.
+   */
+  private ensurePlayable(): Point[] {
+    const broken: Point[] = [];
+    const positions = this.tilePositions();
+    if (positions.length === 0) return broken;
+    for (;;) {
+      for (let attempt = 0; attempt < 200 && !this.hasMove(); attempt++) {
+        this.fillPositions(positions, positions.map((p) => this.get(p)));
+      }
+      if (this.hasMove()) return broken;
+      const stones = this.allInnerPositions().filter((p) => this.get(p) === STONE);
+      if (stones.length === 0) return broken;
+      const s = stones[Math.floor(this.rng() * stones.length)];
+      this.grid[s.r][s.c] = 0;
+      broken.push(s);
     }
   }
 
   private fillPositions(positions: Point[], values: number[]): void {
-    const vals = [...values];
-    for (let i = vals.length - 1; i > 0; i--) {
-      const j = Math.floor(this.rng() * (i + 1));
-      [vals[i], vals[j]] = [vals[j], vals[i]];
-    }
+    const vals = shuffled(values, this.rng);
     positions.forEach((p, i) => (this.grid[p.r][p.c] = vals[i]));
   }
 
@@ -226,8 +285,9 @@ export class Board {
     return out;
   }
 
-  private occupiedPositions(): Point[] {
-    return this.allInnerPositions().filter((p) => this.get(p) !== 0);
+  /** Vị trí các ô có hình (không tính đá). */
+  private tilePositions(): Point[] {
+    return this.allInnerPositions().filter((p) => this.get(p) > 0);
   }
 }
 
@@ -246,6 +306,28 @@ function line(from: number, to: number): number[] {
   const step = from <= to ? 1 : -1;
   for (let i = from; i !== to + step; i += step) out.push(i);
   return out;
+}
+
+/** Bản sao đã xáo trộn (Fisher–Yates). */
+function shuffled<T>(items: T[], rng: Rng): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/** Gộp các chặng liên tiếp của cùng một ô (A→B rồi B→C thành A→C), bỏ ô quay về chỗ cũ. */
+function mergeMoves(moves: Move[]): Move[] {
+  const key = (p: Point) => `${p.r},${p.c}`;
+  const byPos = new Map<string, Move>(); // vị trí hiện tại → nước đi gộp
+  for (const m of moves) {
+    const prev = byPos.get(key(m.from));
+    byPos.delete(key(m.from));
+    byPos.set(key(m.to), { from: prev ? prev.from : m.from, to: m.to });
+  }
+  return [...byPos.values()].filter((m) => !same(m.from, m.to));
 }
 
 /** Mọi ô trên đoạn thẳng p1–p2 (gồm cả hai đầu). p1, p2 phải cùng hàng hoặc cùng cột. */

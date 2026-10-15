@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
+import { STONE } from './Board';
 
 /**
  * Vẽ hình cho các ô bằng code, không cần file ảnh.
  * Khi có bộ hình riêng (PNG/SVG), chỉ cần load ảnh trong preload()
- * với key `tile-1`, `tile-2`, ... và bỏ hàm này đi.
+ * với key `tile-1`, `tile-2`, ..., `stone` và bỏ hàm này đi.
  */
 
 export const TEXTURE_SIZE = 128;
 export const MAX_TYPES = 40;
+export const STONE_KEY = 'stone';
 
 const COLORS = [0xe8505b, 0x3a86ff, 0x2a9d8f, 0xf4a259, 0x8e5ad8];
 type ShapeFn = (g: Phaser.GameObjects.Graphics, cx: number, cy: number, s: number, color: number) => void;
@@ -48,7 +50,30 @@ export function tileKey(type: number): string {
   return `tile-${type}`;
 }
 
+/** Khóa texture cho một giá trị trên bàn: ô hình hoặc đá. */
+export function textureFor(value: number): string {
+  return value === STONE ? STONE_KEY : tileKey(value);
+}
+
+/** Đá chắn đường: khối xám có vết nứt, khác hẳn nền kem của ô hình. */
+function createStoneTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(STONE_KEY)) return;
+  const S = TEXTURE_SIZE;
+  const g = scene.add.graphics();
+  g.fillStyle(0x3d474f, 1).fillRoundedRect(4, 10, S - 8, S - 12, 18);
+  g.fillStyle(0x7b8790, 1).fillRoundedRect(4, 2, S - 8, S - 12, 18);
+  // Mặt sáng phía trên bên trái cho cảm giác khối đá
+  g.fillStyle(0x95a1a9, 1);
+  poly(g, 0, 0, [[18, 14], [80, 12], [62, 40], [16, 52]]);
+  g.lineStyle(5, 0x4b555d, 1);
+  g.beginPath().moveTo(34, 30).lineTo(56, 56).lineTo(46, 78).lineTo(66, 102).strokePath();
+  g.beginPath().moveTo(56, 56).lineTo(88, 48).lineTo(104, 64).strokePath();
+  g.generateTexture(STONE_KEY, S, S);
+  g.destroy();
+}
+
 export function createTileTextures(scene: Phaser.Scene): void {
+  createStoneTexture(scene);
   const S = TEXTURE_SIZE;
   for (let t = 1; t <= MAX_TYPES; t++) {
     const key = tileKey(t);

@@ -1,17 +1,26 @@
 import Phaser from 'phaser';
-import { Board, same, type Point } from '../game/Board';
-import { getLevel, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
-import { createTileTextures, tileKey, TEXTURE_SIZE } from '../game/tileArt';
+import { Board, same, type Gravity, type Point } from '../game/Board';
+import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
+import { createTileTextures, textureFor, TEXTURE_SIZE } from '../game/tileArt';
 import { loadBest, saveBest, unlockLevel } from '../game/storage';
 import { Button, C, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
 // Thanh HUD phía trên gọn một hàng: màn ngang thấp nên nhường tối đa chiều cao cho bàn chơi.
 const HUD_H = 128;
 const MARGIN = 12;
+/**
+ * Bề rộng vòng ô trống quanh bàn (nơi đường nối đi vòng ra ngoài), tính theo cạnh ô.
+ * Về logic vòng này vẫn là một hàng/cột ô trống của Board, nhưng chỉ vẽ hẹp lại
+ * để ô hình chiếm gần hết chiều ngang màn hình.
+ */
+const RING = 0.4;
 const HINTS_PER_LEVEL = 3;
 const SHUFFLES_PER_LEVEL = 3;
 const SCORE_PER_PAIR = 10;
 const TIME_BONUS_PER_PAIR = 1; // giây cộng thêm mỗi lần ăn cặp
+
+/** Mũi tên chỉ hướng dồn kế tiếp của kiểu Xoay vòng. */
+const ARROW: Partial<Record<Gravity, string>> = { down: '↓', left: '←', up: '↑', right: '→' };
 
 export interface SceneData {
   level?: number;
@@ -33,6 +42,9 @@ export class GameScene extends Phaser.Scene {
 
   private sprites: (Phaser.GameObjects.Image | null)[][] = [];
   private cell = 0;
+  /** Bề rộng vòng ô trống quanh bàn, tính bằng điểm ảnh (xem RING). */
+  private ring = 0;
+  /** Góc trên bên trái của bàn, tính cả vòng ô trống. */
   private originX = 0;
   private originY = 0;
 
@@ -47,10 +59,13 @@ export class GameScene extends Phaser.Scene {
   private shuffles = SHUFFLES_PER_LEVEL;
   private ended = false;
   private paused = false;
+  /** Số cặp đã ăn trong màn; quyết định hướng dồn của kiểu Xoay vòng. */
+  private matches = 0;
 
   /** Mọi đối tượng của HUD, để dựng lại khi kích thước màn hình đổi. */
   private hud: { destroy(): void }[] = [];
   private scoreText!: Phaser.GameObjects.Text;
+  private gravityText!: Phaser.GameObjects.Text;
   private timeBar!: Phaser.GameObjects.Graphics;
   private timeBarRect!: Rect;
   private hintBtn!: Button;
@@ -72,6 +87,7 @@ export class GameScene extends Phaser.Scene {
     this.selected = null;
     this.hintMove = null;
     this.ended = false;
+    this.matches = 0;
     this.hud = [];
     this.dialog = null;
   }
@@ -83,7 +99,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(C.bg);
 
     this.board = new Board(this.cfg.rows, this.cfg.cols);
-    this.board.generate(this.cfg.types);
+    this.board.generate(this.cfg.types, this.cfg.stones ?? 0);
 
     this.layoutBoard();
     this.createTiles();
@@ -106,10 +122,13 @@ export class GameScene extends Phaser.Scene {
     // Vùng đặt bàn: toàn bộ phần dưới thanh HUD
     const area: Rect = { x: 0, y: HUD_H, w: W, h: H - HUD_H };
     const { rows, cols } = this.board;
-    // +2 vì có viền ngoài để vẽ đường nối vòng
-    this.cell = Math.floor(Math.min((area.w - MARGIN * 2) / (cols + 2), (area.h - MARGIN * 2) / (rows + 2)));
-    this.originX = Math.round(area.x + (area.w - this.cell * (cols + 2)) / 2);
-    this.originY = Math.round(area.y + (area.h - this.cell * (rows + 2)) / 2);
+    // Mỗi chiều có thêm hai vòng ô trống (mỗi vòng RING cạnh ô) để vẽ đường nối vòng ra ngoài
+    this.cell = Math.floor(
+      Math.min((area.w - MARGIN * 2) / (cols + 2 * RING), (area.h - MARGIN * 2) / (rows + 2 * RING)),
+    );
+    this.ring = Math.round(this.cell * RING);
+    this.originX = Math.round(area.x + (area.w - (this.cell * cols + this.ring * 2)) / 2);
+    this.originY = Math.round(area.y + (area.h - (this.cell * rows + this.ring * 2)) / 2);
   }
 
   /** Tỉ lệ màn hình đổi giữa màn (chia đôi màn hình, kéo cửa sổ): giữ nguyên trạng thái, chỉ sắp xếp lại bố cục. */
@@ -124,7 +143,7 @@ export class GameScene extends Phaser.Scene {
         // Bỏ dở hiệu ứng đang chạy (xuất hiện, dồn ô, lật hình...) và đặt ô thẳng về trạng thái cuối
         this.tweens.killTweensOf(img);
         const { x, y } = this.cellCenter({ r, c });
-        img.setPosition(x, y).setTexture(tileKey(this.board.grid[r][c])).setScale(scale).setAngle(0);
+        img.setPosition(x, y).setTexture(textureFor(this.board.grid[r][c])).setScale(scale).setAngle(0);
       }
     this.pathGfx.clear();
     this.select(this.selected);
@@ -138,10 +157,16 @@ export class GameScene extends Phaser.Scene {
     if (this.dialog) this.openDialog(this.dialog.opts);
   }
 
+  /** Tâm của ô (r, c) trên màn hình; hàng/cột 0 và rows+1/cols+1 nằm giữa vòng ô trống hẹp. */
   private cellCenter(p: Point): { x: number; y: number } {
+    const axis = (i: number, n: number) => {
+      if (i <= 0) return this.ring / 2;
+      if (i > n) return this.ring + n * this.cell + this.ring / 2;
+      return this.ring + (i - 0.5) * this.cell;
+    };
     return {
-      x: this.originX + (p.c + 0.5) * this.cell,
-      y: this.originY + (p.r + 0.5) * this.cell,
+      x: this.originX + axis(p.c, this.board.cols),
+      y: this.originY + axis(p.r, this.board.rows),
     };
   }
 
@@ -154,7 +179,7 @@ export class GameScene extends Phaser.Scene {
         const v = this.board.grid[r][c];
         if (!v) continue;
         const { x, y } = this.cellCenter({ r, c });
-        const img = this.add.image(x, y, tileKey(v)).setDisplaySize(size, size);
+        const img = this.add.image(x, y, textureFor(v)).setDisplaySize(size, size);
         // Hiệu ứng xuất hiện
         img.setScale(0);
         this.tweens.add({
@@ -180,7 +205,7 @@ export class GameScene extends Phaser.Scene {
       .fillStyle(C.panel, 1)
       .fillRoundedRect(MARGIN, MARGIN, W - MARGIN * 2, HUD_H - MARGIN * 2, 20);
     keep(this.add.text(36, 20, `Màn ${this.levelIndex + 1}`, textStyle(40, C.text, 'bold')));
-    keep(this.add.text(36, 70, GRAVITY_LABEL[this.cfg.gravity], textStyle(24, C.textDim)));
+    this.gravityText = keep(this.add.text(36, 70, '', textStyle(24, C.textDim)));
     this.scoreText = keep(this.add.text(W - 36, 20, '', textStyle(40, C.text, 'bold')).setOrigin(1, 0));
     keep(this.add.text(W - 36, 70, `Kỷ lục: ${loadBest()}`, textStyle(24, C.textDim)).setOrigin(1, 0));
 
@@ -206,6 +231,7 @@ export class GameScene extends Phaser.Scene {
 
   private refreshHud(): void {
     this.scoreText.setText(`${this.score} điểm`);
+    this.gravityText.setText(this.gravityLabel());
     this.hintBtn.setLabel(`Gợi ý (${this.hints})`, this.hints > 0);
     this.shuffleBtn.setLabel(`Đảo bàn (${this.shuffles})`, this.shuffles > 0);
     this.drawTimeBar();
@@ -221,6 +247,13 @@ export class GameScene extends Phaser.Scene {
         .fillStyle(ratio > 0.25 ? C.timeOk : C.timeLow, 1)
         .fillRoundedRect(x, y, Math.max(h, w * ratio), h, 6);
     }
+  }
+
+  /** Tên kiểu dồn trên HUD; kiểu Xoay vòng kèm mũi tên hướng dồn ở lần ăn cặp tới. */
+  private gravityLabel(): string {
+    const mode = this.cfg.gravity;
+    if (mode !== 'rotate') return GRAVITY_LABEL[mode];
+    return `${GRAVITY_LABEL.rotate} ${ARROW[gravityFor(mode, this.matches)] ?? ''}`;
   }
 
   private toast(msg: string): void {
@@ -243,10 +276,12 @@ export class GameScene extends Phaser.Scene {
 
   private onPointer(p: Phaser.Input.Pointer): void {
     if (this.ended || this.paused) return;
-    const c = Math.floor((p.worldX - this.originX) / this.cell);
-    const r = Math.floor((p.worldY - this.originY) / this.cell);
+    // Chạm vào vòng ô trống cho ra hàng/cột 0 hoặc rows+1/cols+1, bị isInside loại ra
+    const c = Math.floor((p.worldX - this.originX - this.ring) / this.cell) + 1;
+    const r = Math.floor((p.worldY - this.originY - this.ring) / this.cell) + 1;
     const pt = { r, c };
-    if (!this.board.isInside(pt) || this.board.get(pt) === 0) return;
+    // Ô trống và đá không chọn được
+    if (!this.board.isInside(pt) || this.board.get(pt) <= 0) return;
 
     if (!this.selected) {
       this.select(pt);
@@ -301,7 +336,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Cập nhật logic + dồn ô
-    const moves = this.board.remove(a, b, this.cfg.gravity);
+    const moves = this.board.remove(a, b, gravityFor(this.cfg.gravity, this.matches++));
     const moving = moves.map((m) => this.sprites[m.from.r][m.from.c]);
     moves.forEach((m) => (this.sprites[m.from.r][m.from.c] = null));
     moves.forEach((m, i) => {
@@ -321,9 +356,10 @@ export class GameScene extends Phaser.Scene {
     } else if (!this.board.hasMove()) {
       this.time.delayedCall(450, () => {
         if (this.ended) return;
-        this.board.shuffle();
+        const broken = this.board.shuffle();
         this.syncTextures();
-        this.toast('Hết nước đi – tự động đảo bàn');
+        this.breakStones(broken);
+        this.toast(broken.length ? 'Hết nước đi – đá vỡ để mở đường' : 'Hết nước đi – tự động đảo bàn');
       });
     }
   }
@@ -361,28 +397,49 @@ export class GameScene extends Phaser.Scene {
     this.shuffles--;
     this.select(null);
     this.setHint(null);
-    this.board.shuffle();
+    const broken = this.board.shuffle();
     this.syncTextures();
+    this.breakStones(broken);
+    if (broken.length) this.toast('Đá vỡ để mở đường');
     this.refreshHud();
   }
 
-  /** Sau khi xáo trộn: vị trí ô giữ nguyên, chỉ đổi hình hiển thị. */
+  /** Sau khi xáo trộn: vị trí ô giữ nguyên, chỉ đổi hình hiển thị (đá đứng yên). */
   private syncTextures(): void {
     for (let r = 1; r <= this.board.rows; r++)
       for (let c = 1; c <= this.board.cols; c++) {
         const img = this.sprites[r][c];
         const v = this.board.grid[r][c];
-        if (!img || !v) continue;
+        if (!img || v <= 0) continue;
         const sx = (this.cell - 2) / TEXTURE_SIZE;
         this.tweens.add({
           targets: img,
           scaleX: 0,
           duration: 120,
           yoyo: true,
-          onYoyo: () => img.setTexture(tileKey(v)),
+          onYoyo: () => img.setTexture(textureFor(v)),
           onComplete: () => img.setScale(sx),
         });
       }
+  }
+
+  /** Đá bị phá khi bàn bế tắc (xem Board.shuffle): hiệu ứng vỡ rồi bỏ khỏi bàn. */
+  private breakStones(points: Point[]): void {
+    for (const p of points) {
+      const img = this.sprites[p.r][p.c];
+      this.sprites[p.r][p.c] = null;
+      if (!img) continue;
+      this.tweens.killTweensOf(img);
+      this.tweens.add({
+        targets: img,
+        scaleX: img.scaleX * 1.25,
+        scaleY: img.scaleY * 1.25,
+        angle: 15,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => img.destroy(),
+      });
+    }
   }
 
   // ---------------- Thời gian & kết thúc ----------------
