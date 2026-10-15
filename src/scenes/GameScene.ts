@@ -2,11 +2,17 @@ import Phaser from 'phaser';
 import { Board, same, type Gravity, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, textureFor, TEXTURE_SIZE } from '../game/tileArt';
-import { loadBest, saveBest, unlockLevel } from '../game/storage';
+import { saveBest, unlockLevel } from '../game/storage';
 import { Button, C, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
-// Thanh HUD phía trên gọn một hàng: màn ngang thấp nên nhường tối đa chiều cao cho bàn chơi.
-const HUD_H = 128;
+/**
+ * Thanh HUD mỏng một hàng phía trên, nhường tối đa chiều cao cho bàn chơi:
+ * [Màn][Kiểu dồn][Gợi ý][Đảo bàn][Dừng][Thanh thời gian][Điểm].
+ * Kỷ lục không hiện trong HUD (vẫn được lưu, hiện ở menu).
+ */
+const HUD_H = 80;
+/** Chỗ dành sẵn cho điểm ở góc phải, để thanh thời gian không co giãn khi điểm tăng. */
+const SCORE_W = 160;
 const MARGIN = 12;
 /**
  * Bề rộng vòng ô trống quanh bàn (nơi đường nối đi vòng ra ngoài), tính theo cạnh ô.
@@ -65,7 +71,7 @@ export class GameScene extends Phaser.Scene {
   /** Mọi đối tượng của HUD, để dựng lại khi kích thước màn hình đổi. */
   private hud: { destroy(): void }[] = [];
   private scoreText!: Phaser.GameObjects.Text;
-  private gravityText!: Phaser.GameObjects.Text;
+  private gravityArrow: Phaser.GameObjects.Text | null = null;
   private timeBar!: Phaser.GameObjects.Graphics;
   private timeBarRect!: Rect;
   private hintBtn!: Button;
@@ -200,21 +206,38 @@ export class GameScene extends Phaser.Scene {
       return o;
     };
 
-    // Thanh HUD trải hết chiều ngang. Trái: màn + kiểu dồn; phải: điểm + kỷ lục.
+    const cy = HUD_H / 2; // giữa thanh HUD
+
     keep(this.add.graphics())
       .fillStyle(C.panel, 1)
-      .fillRoundedRect(MARGIN, MARGIN, W - MARGIN * 2, HUD_H - MARGIN * 2, 20);
-    keep(this.add.text(36, 20, `Màn ${this.levelIndex + 1}`, textStyle(40, C.text, 'bold')));
-    this.gravityText = keep(this.add.text(36, 70, '', textStyle(24, C.textDim)));
-    this.scoreText = keep(this.add.text(W - 36, 20, '', textStyle(40, C.text, 'bold')).setOrigin(1, 0));
-    keep(this.add.text(W - 36, 70, `Kỷ lục: ${loadBest()}`, textStyle(24, C.textDim)).setOrigin(1, 0));
+      .fillRoundedRect(MARGIN, MARGIN, W - MARGIN * 2, HUD_H - MARGIN * 2, 16);
 
-    // Giữa: Gợi ý | nút dừng | Đảo bàn, thanh thời gian ngay bên dưới
-    keep(new Button(this, W / 2, 50, 60, 60, 'II', () => this.pause()));
-    this.hintBtn = keep(new Button(this, W / 2 - 148, 50, 200, 52, '', () => this.useHint()));
-    this.shuffleBtn = keep(new Button(this, W / 2 + 148, 50, 200, 52, '', () => this.useShuffle()));
+    // Xếp từ trái sang phải theo bề rộng thật của chữ; thanh thời gian lấp phần còn lại
+    let x = 32;
+    const stage = keep(this.add.text(x, cy, `Màn ${this.levelIndex + 1}`, textStyle(28, C.text, 'bold')));
+    stage.setOrigin(0, 0.5);
+    x += stage.width + 16;
+    const gravity = keep(this.add.text(x, cy, GRAVITY_LABEL[this.cfg.gravity], textStyle(20, C.textDim)));
+    gravity.setOrigin(0, 0.5);
+    x += gravity.width;
+    this.gravityArrow = null;
+    if (this.cfg.gravity === 'rotate') {
+      // Mũi tên là chữ riêng, đổi sau mỗi lần ăn cặp mà không xô lệch các nút phía sau
+      this.gravityArrow = keep(this.add.text(x + 6, cy, '', textStyle(22, C.text, 'bold')).setOrigin(0, 0.5));
+      x += 6 + 24;
+    }
+    x += 20;
+    this.hintBtn = keep(new Button(this, x + 65, cy, 130, 44, '', () => this.useHint(), 1, 22));
+    x += 130 + 10;
+    this.shuffleBtn = keep(new Button(this, x + 75, cy, 150, 44, '', () => this.useShuffle(), 1, 22));
+    x += 150 + 10;
+    keep(new Button(this, x + 22, cy, 44, 44, 'II', () => this.pause(), 1, 22));
+    x += 44 + 20;
+
+    this.scoreText = keep(this.add.text(W - 32, cy, '', textStyle(28, C.text, 'bold')).setOrigin(1, 0.5));
     this.timeBar = keep(this.add.graphics());
-    this.timeBarRect = { x: W / 2 - 248, y: 92, w: 496, h: 12 };
+    const barRight = W - 32 - SCORE_W - 20;
+    this.timeBarRect = { x, y: cy - 7, w: Math.max(60, barRight - x), h: 14 };
 
     this.toastText = keep(
       this.add
@@ -231,7 +254,10 @@ export class GameScene extends Phaser.Scene {
 
   private refreshHud(): void {
     this.scoreText.setText(`${this.score} điểm`);
-    this.gravityText.setText(this.gravityLabel());
+    // Điểm rất lớn thì thu nhỏ chữ cho vừa chỗ dành sẵn
+    this.scoreText.setScale(Math.min(1, SCORE_W / this.scoreText.width));
+    // Xoay vòng: mũi tên chỉ hướng dồn ở lần ăn cặp tới
+    this.gravityArrow?.setText(ARROW[gravityFor(this.cfg.gravity, this.matches)] ?? '');
     this.hintBtn.setLabel(`Gợi ý (${this.hints})`, this.hints > 0);
     this.shuffleBtn.setLabel(`Đảo bàn (${this.shuffles})`, this.shuffles > 0);
     this.drawTimeBar();
@@ -247,13 +273,6 @@ export class GameScene extends Phaser.Scene {
         .fillStyle(ratio > 0.25 ? C.timeOk : C.timeLow, 1)
         .fillRoundedRect(x, y, Math.max(h, w * ratio), h, 6);
     }
-  }
-
-  /** Tên kiểu dồn trên HUD; kiểu Xoay vòng kèm mũi tên hướng dồn ở lần ăn cặp tới. */
-  private gravityLabel(): string {
-    const mode = this.cfg.gravity;
-    if (mode !== 'rotate') return GRAVITY_LABEL[mode];
-    return `${GRAVITY_LABEL.rotate} ${ARROW[gravityFor(mode, this.matches)] ?? ''}`;
   }
 
   private toast(msg: string): void {

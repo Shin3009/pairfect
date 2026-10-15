@@ -38,7 +38,7 @@ Kích thước bàn ghi theo hàng × cột. Bàn thấp và rộng vì game ch�
 
 ## Các kiểu dồn ô
 
-Mỗi màn có một kiểu dồn ô, quyết định các ô còn lại di chuyển thế nào sau khi xóa một cặp. Tên kiểu dồn hiện ngay dưới số màn trên thanh HUD.
+Mỗi màn có một kiểu dồn ô, quyết định các ô còn lại di chuyển thế nào sau khi xóa một cặp. Tên kiểu dồn hiện ngay sau số màn trên thanh HUD.
 
 | Kiểu | Điều xảy ra sau khi xóa một cặp |
 |---|---|

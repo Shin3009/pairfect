@@ -75,7 +75,11 @@ The code is split into a pure logic layer and a rendering layer:
   - `main.ts` recomputes the size via `sizeFor` on window resize (debounced) and calls `game.scale.setGameSize` when it changes.
   - Scenes lay out X positions relative to `this.scale.width`, because the width varies. Y positions can assume 720.
   - Each scene registers `onGameResize` in `create()`. Menu and stage select simply restart.
-  - The game HUD is a compact one-row top bar (`HUD_H`), because height is what limits tile size.
+  - The game HUD is a thin one-row top bar (`HUD_H` = 80), because height is what limits tile size. It's laid out left to right as stage, gravity, Hint, Shuffle, Pause, time bar, score.
+    - Positions come from measured text widths, and the time bar fills the leftover width.
+    - The score has a fixed slot (`SCORE_W`) on the right, so the bar doesn't move as the score grows.
+    - The rotate-gravity arrow is a separate text object, so it can update without shifting the buttons.
+    - The high score is deliberately not shown in the HUD (a leaderboard is planned); the menu still shows it.
   - `GameScene.relayout()` keeps all state. It snaps sprites to their final positions and textures, rebuilds the HUD (every HUD object goes through `keep()` into `this.hud`), and reopens the current dialog (always open dialogs through `openDialog`).
 - **Portrait viewports.** These only happen in a browser, since Android is locked to landscape. `index.html` covers the game with a CSS "rotate your device" overlay (`@media (orientation: portrait)`), and the game keeps running underneath at the 1100 minimum width.
 - **Relative base path.** `vite.config.ts` uses `base: './'` so the build works inside the Capacitor WebView. Keep it relative.
