@@ -1,0 +1,69 @@
+import Phaser from 'phaser';
+import { loadBest } from '../game/storage';
+import { createTileTextures, MAX_TYPES, TEXTURE_SIZE, tileKey } from '../game/tileArt';
+import { Button, C, GAME_W, showDialog, textStyle } from './ui';
+
+const HOW_TO_PLAY = [
+  'Chạm hai ô có hình giống nhau để nối và xóa chúng.',
+  'Đường nối chỉ đi qua ô trống, rẽ tối đa 2 lần và được vòng ra ngoài mép bàn.',
+  'Xóa hết các cặp trước khi hết giờ. Mỗi cặp được cộng thêm 1 giây.',
+  'Gợi ý chỉ ra một cặp nối được, Đảo bàn xáo lại các ô còn lại.',
+].join('\n\n');
+
+/** Vị trí các ô trang trí lơ lửng ở trên và dưới màn hình. */
+const DECOR: [number, number][] = [
+  [110, 150], [270, 105], [450, 125], [610, 165],
+  [105, 1135], [265, 1185], [455, 1170], [615, 1125],
+];
+const DECOR_SIZE = 96;
+
+export class MenuScene extends Phaser.Scene {
+  constructor() {
+    super('Menu');
+  }
+
+  create(): void {
+    createTileTextures(this);
+    this.cameras.main.setBackgroundColor(C.bg).fadeIn(250, 31, 59, 77);
+    this.createDecor();
+
+    this.add.text(GAME_W / 2, 300, 'Pairfect', textStyle(120, C.text, 'bold')).setOrigin(0.5);
+    this.add.text(GAME_W / 2, 400, 'Tile Connect', textStyle(40, C.textAccent, 'bold')).setOrigin(0.5);
+    this.add.text(GAME_W / 2, 470, `Kỷ lục: ${loadBest()}`, textStyle(30, C.textDim)).setOrigin(0.5);
+
+    new Button(this, GAME_W / 2, 660, 420, 100, 'Chơi', () => this.scene.start('Game', { level: 0, score: 0 }), 1, 40);
+    new Button(this, GAME_W / 2, 790, 420, 84, 'Chọn màn', () => this.scene.start('Levels'), 1, 32);
+    new Button(this, GAME_W / 2, 900, 420, 84, 'Cách chơi', () => this.showHowToPlay(), 1, 32);
+  }
+
+  private showHowToPlay(): void {
+    const close = showDialog(this, {
+      title: 'Cách chơi',
+      body: HOW_TO_PLAY,
+      actions: [{ label: 'Đã hiểu', onClick: () => close() }],
+    });
+  }
+
+  /** Mỗi lần mở menu chọn ngẫu nhiên 4 loại hình, mỗi loại hai ô (một cặp). */
+  private createDecor(): void {
+    const types = Phaser.Utils.Array.Shuffle(Phaser.Utils.Array.NumberArray(1, MAX_TYPES) as number[]).slice(0, 4);
+    const tiles = Phaser.Utils.Array.Shuffle([...types, ...types]);
+    DECOR.forEach(([x, y], i) => {
+      const img = this.add
+        .image(x, y, tileKey(tiles[i]))
+        .setScale(DECOR_SIZE / TEXTURE_SIZE)
+        .setAngle(Phaser.Math.Between(-10, 10))
+        .setAlpha(0.9);
+      this.tweens.add({
+        targets: img,
+        y: y + 14,
+        angle: -img.angle,
+        duration: Phaser.Math.Between(1600, 2400),
+        delay: Phaser.Math.Between(0, 600),
+        ease: 'Sine.InOut',
+        yoyo: true,
+        repeat: -1,
+      });
+    });
+  }
+}

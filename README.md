@@ -68,12 +68,18 @@ src/
     Board.ts            Toàn bộ logic: sinh bàn, tìm đường nối, gợi ý, đảo bàn, dồn ô
     Board.test.ts       Unit test cho logic
     levels.ts           Cấu hình các màn chơi (kích thước, số loại hình, kiểu dồn, thời gian)
+    storage.ts          Lưu kỷ lục điểm và màn đã mở khóa vào localStorage
     tileArt.ts          Vẽ hình cho ô bằng code (tạm thời, thay bằng ảnh thật sau)
   scenes/
-    GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, thắng/thua
+    ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
+    MenuScene.ts        Màn hình chính: Chơi, Chọn màn, Cách chơi
+    LevelSelectScene.ts Danh sách màn, qua màn trước mới mở khóa màn sau
+    GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua
 ```
 
 `Board.ts` không phụ thuộc Phaser nên có thể test riêng hoặc tái sử dụng.
+
+Luồng màn hình: `Menu` → (`Levels`) → `Game`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục.
 
 ### Thuật toán nối
 
@@ -83,15 +89,14 @@ Mọi đường đi tối đa 2 lần rẽ đều có dạng `a → p → q → 
 
 - **Độ khó, số màn:** sửa mảng `LEVELS` trong `src/game/levels.ts`. Lưu ý `rows * cols` phải là số chẵn và `types` không vượt quá 40.
 - **Điểm, số lượt gợi ý/đảo, thưởng thời gian:** các hằng số đầu file `GameScene.ts`.
-- **Màu sắc giao diện:** đối tượng `C` trong `GameScene.ts`.
-- **Dùng hình ảnh thật thay cho hình vẽ bằng code:** thêm hàm `preload()` vào `GameScene` và load ảnh với key `tile-1`, `tile-2`, ... (ví dụ `this.load.image('tile-1', 'assets/apple.png')`), sau đó bỏ lời gọi `createTileTextures`. Ảnh nên là hình vuông, kích thước khoảng 128x128.
+- **Màu sắc giao diện:** đối tượng `C` trong `src/scenes/ui.ts`.
+- **Dùng hình ảnh thật thay cho hình vẽ bằng code:** thêm hàm `preload()` vào `MenuScene` (scene chạy đầu tiên) và load ảnh với key `tile-1`, `tile-2`, ... (ví dụ `this.load.image('tile-1', 'assets/apple.png')`), sau đó bỏ các lời gọi `createTileTextures` trong `MenuScene` và `GameScene`. Ảnh nên là hình vuông, kích thước khoảng 128x128.
 
 Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset có giấy phép rõ ràng như CC0 từ kenney.nl), không dùng tài nguyên của game Onet gốc.
 
 ## Gợi ý phát triển tiếp
 
 - Âm thanh khi chọn, khi nối, khi qua màn (`this.load.audio` + `this.sound.play`).
-- Màn hình menu, chọn màn, tạm dừng (thêm Scene mới).
-- Lưu tiến độ màn chơi (hiện chỉ lưu kỷ lục điểm trong `localStorage`).
+- Nút Back của Android mở menu tạm dừng / quay lại: plugin `@capacitor/app`.
 - Rung khi nối thành công: plugin `@capacitor/haptics`.
 - Quảng cáo / mua trong ứng dụng: các plugin cộng đồng của Capacitor cho AdMob và Google Play Billing.

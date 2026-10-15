@@ -2,32 +2,17 @@ import Phaser from 'phaser';
 import { Board, same, type Point } from '../game/Board';
 import { getLevel, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, tileKey, TEXTURE_SIZE } from '../game/tileArt';
-
-export const GAME_W = 720;
-export const GAME_H = 1280;
+import { loadBest, saveBest, unlockLevel } from '../game/storage';
+import { Button, C, GAME_H, GAME_W, showDialog, textStyle } from './ui';
 
 const HUD_H = 210;
 const MARGIN = 12;
-const FONT = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 const HINTS_PER_LEVEL = 3;
 const SHUFFLES_PER_LEVEL = 3;
 const SCORE_PER_PAIR = 10;
 const TIME_BONUS_PER_PAIR = 1; // giây cộng thêm mỗi lần ăn cặp
 
-const C = {
-  bg: 0x1f3b4d,
-  panel: 0x2c5266,
-  accent: 0xffc857,
-  path: 0xffe066,
-  select: 0xffc857,
-  hint: 0x7ae582,
-  timeOk: 0x7ae582,
-  timeLow: 0xe8505b,
-  text: '#ffffff',
-  textDim: '#b8d0dc',
-};
-
-interface SceneData {
+export interface SceneData {
   level?: number;
   score?: number;
 }
@@ -52,6 +37,7 @@ export class GameScene extends Phaser.Scene {
   private hints = HINTS_PER_LEVEL;
   private shuffles = SHUFFLES_PER_LEVEL;
   private ended = false;
+  private paused = false;
 
   private scoreText!: Phaser.GameObjects.Text;
   private timeBar!: Phaser.GameObjects.Graphics;
@@ -75,6 +61,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Cờ tạm dừng của Clock và TweenManager không tự xóa khi scene khởi động lại
+    this.setPaused(false);
     createTileTextures(this);
     this.cameras.main.setBackgroundColor(C.bg);
 
@@ -148,6 +136,7 @@ export class GameScene extends Phaser.Scene {
     this.add
       .text(GAME_W - 36, 80, `Kỷ lục: ${loadBest()}`, textStyle(24, C.textDim))
       .setOrigin(1, 0);
+    new Button(this, GAME_W / 2, 58, 64, 64, 'II', () => this.pause());
 
     this.timeBar = this.add.graphics();
 
@@ -155,7 +144,7 @@ export class GameScene extends Phaser.Scene {
     this.shuffleBtn = new Button(this, GAME_W - 200, 164, 300, 52, '', () => this.useShuffle());
 
     this.toastText = this.add
-      .text(GAME_W / 2, HUD_H + 30, '', textStyle(28, '#1f3b4d', 'bold'))
+      .text(GAME_W / 2, HUD_H + 30, '', textStyle(28, C.textDark, 'bold'))
       .setOrigin(0.5)
       .setBackgroundColor('#ffc857')
       .setPadding(18, 8, 18, 8)
@@ -203,7 +192,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------- Tương tác ----------------
 
   private onPointer(p: Phaser.Input.Pointer): void {
-    if (this.ended) return;
+    if (this.ended || this.paused) return;
     const c = Math.floor((p.worldX - this.originX) / this.cell);
     const r = Math.floor((p.worldY - this.originY) / this.cell);
     const pt = { r, c };
@@ -355,95 +344,65 @@ export class GameScene extends Phaser.Scene {
     const bonus = Math.ceil(this.timeLeft) * 2;
     this.score += bonus;
     saveBest(this.score);
+    unlockLevel(this.levelIndex + 1);
     this.refreshHud();
-    this.showOverlay('Qua màn!', `Thưởng thời gian: +${bonus}\nTổng: ${this.score} điểm`, 'Màn tiếp theo', () =>
-      this.scene.restart({ level: this.levelIndex + 1, score: this.score }),
-    );
+    showDialog(this, {
+      title: 'Qua màn!',
+      body: `Thưởng thời gian: +${bonus}\nTổng: ${this.score} điểm`,
+      actions: [
+        { label: 'Màn tiếp theo', onClick: () => this.scene.restart({ level: this.levelIndex + 1, score: this.score }) },
+        { label: 'Về menu', onClick: () => this.scene.start('Menu') },
+      ],
+    });
   }
 
   private loseLevel(): void {
     this.ended = true;
     this.select(null);
     saveBest(this.score);
-    this.showOverlay('Hết giờ!', `Bạn đạt ${this.score} điểm`, 'Chơi lại', () =>
-      this.scene.restart({ level: 0, score: 0 }),
-    );
-  }
-
-  private showOverlay(title: string, body: string, action: string, onAction: () => void): void {
-    const shade = this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.55).setOrigin(0).setDepth(30);
-    shade.setInteractive(); // chặn click xuống bàn chơi
-    const panel = this.add.graphics().setDepth(31);
-    panel.fillStyle(0xfffaf0, 1).fillRoundedRect(80, 460, GAME_W - 160, 360, 28);
-    this.add.text(GAME_W / 2, 520, title, textStyle(56, '#1f3b4d', 'bold')).setOrigin(0.5, 0).setDepth(32);
-    this.add
-      .text(GAME_W / 2, 610, body, { ...textStyle(30, '#2c5266'), align: 'center' })
-      .setOrigin(0.5, 0)
-      .setDepth(32);
-    new Button(this, GAME_W / 2, 750, 320, 70, action, onAction, 32);
-  }
-}
-
-// ---------------- Tiện ích ----------------
-
-function textStyle(size: number, color: string, weight = 'normal'): Phaser.Types.GameObjects.Text.TextStyle {
-  return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: weight, resolution: 2 };
-}
-
-const BEST_KEY = 'pairfect-best';
-
-function loadBest(): number {
-  try {
-    return Number(localStorage.getItem(BEST_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function saveBest(score: number): void {
-  try {
-    if (score > loadBest()) localStorage.setItem(BEST_KEY, String(score));
-  } catch {
-    /* bỏ qua nếu trình duyệt chặn lưu trữ */
-  }
-}
-
-/** Nút bấm đơn giản: nền bo góc + chữ. */
-class Button {
-  private bg: Phaser.GameObjects.Graphics;
-  private label: Phaser.GameObjects.Text;
-  private enabled = true;
-
-  constructor(
-    scene: Phaser.Scene,
-    private x: number,
-    private y: number,
-    private w: number,
-    private h: number,
-    text: string,
-    onClick: () => void,
-    depth = 1,
-  ) {
-    this.bg = scene.add.graphics().setDepth(depth);
-    this.label = scene.add.text(x, y, text, textStyle(28, '#1f3b4d', 'bold')).setOrigin(0.5).setDepth(depth);
-    const zone = scene.add.zone(x, y, w, h).setInteractive({ useHandCursor: true }).setDepth(depth);
-    zone.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-      e.stopPropagation();
-      if (this.enabled) onClick();
+    showDialog(this, {
+      title: 'Hết giờ!',
+      body: `Bạn đạt ${this.score} điểm`,
+      actions: [
+        { label: 'Chơi lại', onClick: () => this.scene.restart({ level: this.levelIndex, score: 0 }) },
+        { label: 'Về menu', onClick: () => this.scene.start('Menu') },
+      ],
     });
-    this.draw();
   }
 
-  setLabel(text: string, enabled: boolean): void {
-    this.label.setText(text);
-    this.enabled = enabled;
-    this.draw();
+  // ---------------- Tạm dừng ----------------
+
+  /** Dừng đồng hồ đếm giờ, các hiệu ứng và thao tác trên bàn chơi. */
+  private setPaused(paused: boolean): void {
+    this.paused = paused;
+    this.time.paused = paused;
+    this.tweens.paused = paused;
   }
 
-  private draw(): void {
-    this.bg.clear();
-    this.bg.fillStyle(this.enabled ? C.accent : 0x6b8796, 1);
-    this.bg.fillRoundedRect(this.x - this.w / 2, this.y - this.h / 2, this.w, this.h, this.h / 2);
-    this.label.setAlpha(this.enabled ? 1 : 0.6);
+  private pause(): void {
+    if (this.ended || this.paused) return;
+    this.setPaused(true);
+    const close = showDialog(this, {
+      title: 'Tạm dừng',
+      shade: 0.92, // che gần kín bàn chơi để không xem trước nước đi khi đang dừng
+      actions: [
+        {
+          label: 'Tiếp tục',
+          onClick: () => {
+            close();
+            this.setPaused(false);
+          },
+        },
+        { label: 'Chơi lại màn', onClick: () => this.leave({ level: this.levelIndex, score: 0 }) },
+        { label: 'Về menu', onClick: () => this.leave() },
+      ],
+    });
+  }
+
+  /** Rời màn đang chơi dở: lưu kỷ lục rồi chơi lại màn (có `restart`) hoặc về menu. */
+  private leave(restart?: SceneData): void {
+    saveBest(this.score);
+    if (restart) this.scene.restart(restart);
+    else this.scene.start('Menu');
   }
 }

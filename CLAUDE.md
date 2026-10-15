@@ -40,11 +40,13 @@ The code is split into a pure logic layer and a rendering layer:
 - **`src/game/Board.ts`** holds all game rules and has no Phaser dependency, so it can be unit-tested directly.
   - Board generation guarantees every type appears an even number of times and that at least one move exists.
   - It also handles pathfinding, hint search (`findAnyMove`), shuffling, and gravity / compaction after a match.
-- **`src/scenes/GameScene.ts`** is the single Phaser scene. It handles rendering, input, tweens, the HUD, the timer and win/lose overlays.
-  - Tuning constants sit at the top of the file: hints and shuffles per level, score per pair, time bonus, and the color palette `C`.
-  - The high score is stored in `localStorage` under `pairfect-best`.
+- **Scenes** run in the order `Menu` → `Levels` (stage select, optional) → `Game`, and are registered in `main.ts`; the first in the list starts on launch. Scenes switch with `this.scene.start(key, data)`. `Game` takes `{ level, score }` (`SceneData`) and moves to the next level with `this.scene.restart(...)`.
+- **`src/scenes/GameScene.ts`** holds all gameplay: rendering, input, tweens, the HUD, the timer, pause, and the win/lose dialogs. Tuning constants sit at the top of the file: hints and shuffles per level, score per pair, and time bonus.
+  - Pausing sets `this.time.paused` and `this.tweens.paused` and shows a dialog in the same scene. Phaser keeps both flags when a scene restarts, so `create()` clears them with `setPaused(false)`. Any new way into or out of the scene must not leave them set.
+- **`src/scenes/ui.ts`** holds shared UI: `GAME_W` / `GAME_H`, the color palette `C`, `textStyle`, `Button`, and `showDialog`. `showDialog` adds a full-screen interactive shade that blocks taps underneath, and returns a function that closes it.
+- **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores the high score (`pairfect-best`) and the highest unlocked level index (`pairfect-unlocked`). Clearing level `i` unlocks `i + 1`, and the stage-select screen treats every index up to that value as open.
 - **`src/game/levels.ts`** defines the `LEVELS` array: rows, cols, `types`, gravity mode and time for each level. `getLevel(i)` loops back through the levels after the last one, cutting 30 s each loop with a 90 s floor.
-- **`src/game/tileArt.ts`** draws tile textures procedurally under the keys `tile-1` to `tile-40` (`MAX_TYPES`). To use real art, load images under the same keys in a `preload()` and drop the `createTileTextures` call.
+- **`src/game/tileArt.ts`** draws tile textures procedurally under the keys `tile-1` to `tile-40` (`MAX_TYPES`). Textures are global, and both `MenuScene` and `GameScene` call the idempotent `createTileTextures`. To use real art, load images under the same keys in `MenuScene.preload()` and remove both calls.
 
 ### Key invariants
 
@@ -52,7 +54,7 @@ The code is split into a pure logic layer and a rendering layer:
 - **Pathfinding.** Every path with at most 2 turns has the shape `a → p → q → b`, where the middle segment `p → q` lies on some full row or column. `findPath` tries every row and column, including the border ones, keeps the shortest clear path, and returns only its corner points.
 - **Board ↔ sprite sync.** After a match, `Board.remove()` returns the `Move[]` produced by gravity. `GameScene.matchPair` uses that list to re-key `sprites` and tween each moved sprite. A shuffle never moves tiles: it only reassigns values among occupied cells, and `syncTextures` swaps the textures in place.
 - **Level constraints.** `rows * cols` must be even (the `Board` constructor throws otherwise), and a level's `types` must not exceed `MAX_TYPES` (40).
-- **Coordinate space.** The game renders at a fixed logical size of 720×1280 (`GAME_W` / `GAME_H`) with `Scale.FIT`. Layout math in `GameScene` uses that coordinate space.
+- **Coordinate space.** The game renders at a fixed logical size of 720×1280 (`GAME_W` / `GAME_H`) with `Scale.FIT`. All scene layout math uses that coordinate space.
 - **Relative base path.** `vite.config.ts` uses `base: './'` so the build works inside the Capacitor WebView. Keep it relative.
 
 ### Tests
