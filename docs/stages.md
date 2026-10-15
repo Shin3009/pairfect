@@ -13,10 +13,11 @@ Toàn bộ dữ liệu màn chơi nằm trong `LEVELS` ở [`src/game/levels.ts`
   - Qua màn được thưởng **2 điểm cho mỗi giây còn lại** (làm tròn lên).
   - Điểm được cộng dồn từ màn này sang màn sau trong cùng một lượt chơi.
 - **Trợ giúp mỗi màn.**
-  - **3 lần Gợi ý**, mỗi lần chỉ ra một cặp nối được.
-  - **3 lần Đảo bàn**, mỗi lần xáo lại các ô còn lại vào đúng những vị trí đó.
-  - Cả hai được đặt lại khi bắt đầu mỗi màn.
-- **Tự động đảo bàn miễn phí.** Khi không còn cặp nào nối được, bàn tự xáo lại mà không trừ lượt Đảo bàn, kèm thông báo "Hết nước đi – tự động đảo bàn".
+  - **+3 lần Gợi ý**, mỗi lần chỉ ra một cặp nối được.
+  - **+3 lần Đảo bàn**, mỗi lần xáo lại các ô còn lại vào đúng những vị trí đó.
+  - Lượt chưa dùng được **cộng dồn** sang màn sau trong cùng một lượt chơi. Ví dụ qua màn 1 còn 2 Gợi ý và 2 Đảo bàn thì màn 2 có 2 + 3 = 5 Gợi ý và 5 Đảo bàn. Hộp thoại qua màn hiện số lượt mang sang.
+  - Giống điểm, lượt cộng dồn mất khi bắt đầu lượt chơi mới: chơi từ menu hay từ màn chọn màn, chơi lại sau khi hết giờ, hoặc chọn "Chơi lại màn" khi tạm dừng đều quay về 3 Gợi ý và 3 Đảo bàn.
+- **Tự động đảo bàn tốn lượt.** Khi không còn cặp nào nối được, bàn tự xáo lại và **trừ 1 lượt Đảo bàn** của người chơi, kèm thông báo "Hết nước đi – tự dùng 1 lượt Đảo bàn". Nếu đã hết lượt Đảo bàn thì **thua màn** ngay ("Hết nước đi!"), giống như hết giờ.
 - **Cách chia loại hình.** Các cặp được chia lần lượt cho từng loại: loại 1, loại 2, … tới số loại của màn, rồi quay lại loại 1.
   - Khi số cặp đúng bằng hai lần số loại, mỗi loại có **4 ô**: 2 cặp, ghép kiểu nào cũng được.
   - Khi số loại nhiều hơn thế, các loại dư chỉ có **2 ô**, nên mỗi ô đó chỉ có đúng một ô để ghép. Đây là điều khiến màn 6 và 7 khó hơn.
@@ -154,4 +155,4 @@ Kiểu dồn hai hướng làm các ô di chuyển nhiều hơn sau mỗi lần 
 - `npm test` kiểm tra các điều kiện này, kiểm tra quy tắc vòng lặp và giai đoạn khó, và tự chơi hết mọi màn, một vòng lặp cùng hai vòng của giai đoạn khó (`src/game/levels.test.ts`).
 - Vòng lặp luôn lấy bàn, số loại và thời gian của **màn cuối cùng** trong `LEVELS`; thêm hay đổi màn cuối sẽ đổi luôn vòng lặp. Mức giảm mỗi vòng và mức sàn là hai hằng số `LOOP_TIME_STEP` (40 giây) và `LOOP_MIN_TIME` (140 giây) trong `src/game/levels.ts`.
 - Giai đoạn khó chỉnh trong `src/game/levels.ts`: thứ tự kiểu dồn `HARD_GRAVITIES`, số đá `HARD_STONES_START` / `HARD_STONES_STEP` / `HARD_STONES_MAX`. Màn bắt đầu (`HARD_START`) được tính tự động là vòng đầu tiên có thời gian chạm mức sàn, nên đổi thời gian màn cuối, mức giảm hay mức sàn có thể làm màn bắt đầu thay đổi. Một màn bất kỳ trong `LEVELS` cũng có thể có đá qua trường `stones` (số chẵn).
-- Để đổi số lượt gợi ý, số lượt đảo bàn, điểm mỗi cặp hoặc thời gian thưởng, sửa các hằng số đầu file `src/scenes/GameScene.ts`.
+- Để đổi số lượt gợi ý, số lượt đảo bàn cộng thêm mỗi màn (`HINTS_PER_LEVEL`, `SHUFFLES_PER_LEVEL`), điểm mỗi cặp hoặc thời gian thưởng, sửa các hằng số đầu file `src/scenes/GameScene.ts`.

@@ -82,6 +82,8 @@ export class Button {
 
   setLabel(text: string, enabled: boolean): void {
     this.label.setText(text);
+    // Chữ dài hơn nút (vd. số lượt Gợi ý cộng dồn lớn) thì thu nhỏ cho vừa
+    this.label.setScale(Math.min(1, (this.w - 16) / this.label.width));
     this.enabled = enabled;
     this.draw();
   }

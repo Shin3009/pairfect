@@ -20,6 +20,7 @@ const MARGIN = 12;
  * để ô hình chiếm gần hết chiều ngang màn hình.
  */
 const RING = 0.4;
+/** Lượt Gợi ý / Đảo bàn được cộng thêm khi vào mỗi màn; lượt chưa dùng mang sang màn sau. */
 const HINTS_PER_LEVEL = 3;
 const SHUFFLES_PER_LEVEL = 3;
 const SCORE_PER_PAIR = 10;
@@ -31,6 +32,9 @@ const ARROW: Partial<Record<Gravity, string>> = { down: '↓', left: '←', up: 
 export interface SceneData {
   level?: number;
   score?: number;
+  /** Lượt Gợi ý / Đảo bàn còn dư từ màn trước, cộng dồn với lượt của màn này. */
+  hints?: number;
+  shuffles?: number;
 }
 
 interface Rect {
@@ -88,8 +92,8 @@ export class GameScene extends Phaser.Scene {
     this.score = data.score ?? 0;
     this.cfg = getLevel(this.levelIndex);
     this.timeLeft = this.cfg.time;
-    this.hints = HINTS_PER_LEVEL;
-    this.shuffles = SHUFFLES_PER_LEVEL;
+    this.hints = (data.hints ?? 0) + HINTS_PER_LEVEL;
+    this.shuffles = (data.shuffles ?? 0) + SHUFFLES_PER_LEVEL;
     this.selected = null;
     this.hintMove = null;
     this.ended = false;
@@ -373,13 +377,7 @@ export class GameScene extends Phaser.Scene {
     if (this.board.isCleared()) {
       this.time.delayedCall(450, () => this.winLevel());
     } else if (!this.board.hasMove()) {
-      this.time.delayedCall(450, () => {
-        if (this.ended) return;
-        const broken = this.board.shuffle();
-        this.syncTextures();
-        this.breakStones(broken);
-        this.toast(broken.length ? 'Hết nước đi – đá vỡ để mở đường' : 'Hết nước đi – tự động đảo bàn');
-      });
+      this.time.delayedCall(450, () => this.autoShuffle());
     }
   }
 
@@ -413,13 +411,29 @@ export class GameScene extends Phaser.Scene {
 
   private useShuffle(): void {
     if (this.ended || this.shuffles <= 0) return;
+    this.shuffleBoard(false);
+  }
+
+  /** Bàn hết nước đi: tự dùng một lượt Đảo bàn của người chơi; hết lượt thì thua màn. */
+  private autoShuffle(): void {
+    // Người chơi có thể đã tự bấm Đảo bàn trong lúc chờ
+    if (this.ended || this.board.hasMove()) return;
+    if (this.shuffles <= 0) {
+      this.loseLevel('Hết nước đi!', 'Không còn cặp nào nối được và đã hết lượt Đảo bàn.');
+      return;
+    }
+    this.shuffleBoard(true);
+  }
+
+  private shuffleBoard(auto: boolean): void {
     this.shuffles--;
     this.select(null);
     this.setHint(null);
     const broken = this.board.shuffle();
     this.syncTextures();
     this.breakStones(broken);
-    if (broken.length) this.toast('Đá vỡ để mở đường');
+    if (auto) this.toast(broken.length ? 'Hết nước đi – đá vỡ để mở đường' : 'Hết nước đi – tự dùng 1 lượt Đảo bàn');
+    else if (broken.length) this.toast('Đá vỡ để mở đường');
     this.refreshHud();
   }
 
@@ -467,7 +481,7 @@ export class GameScene extends Phaser.Scene {
     if (this.ended) return;
     this.timeLeft -= dt;
     this.drawTimeBar();
-    if (this.timeLeft <= 0) this.loseLevel();
+    if (this.timeLeft <= 0) this.loseLevel('Hết giờ!');
   }
 
   private winLevel(): void {
@@ -480,21 +494,33 @@ export class GameScene extends Phaser.Scene {
     this.refreshHud();
     this.openDialog({
       title: 'Qua màn!',
-      body: `Thưởng thời gian: +${bonus}\nTổng: ${this.score} điểm`,
+      body:
+        `Thưởng thời gian: +${bonus}\nTổng: ${this.score} điểm\n` +
+        `Gợi ý: ${this.hints} + ${HINTS_PER_LEVEL} = ${this.hints + HINTS_PER_LEVEL}\n` +
+        `Đảo bàn: ${this.shuffles} + ${SHUFFLES_PER_LEVEL} = ${this.shuffles + SHUFFLES_PER_LEVEL}`,
       actions: [
-        { label: 'Màn tiếp theo', onClick: () => this.scene.restart({ level: this.levelIndex + 1, score: this.score }) },
+        {
+          label: 'Màn tiếp theo',
+          onClick: () =>
+            this.scene.restart({
+              level: this.levelIndex + 1,
+              score: this.score,
+              hints: this.hints,
+              shuffles: this.shuffles,
+            }),
+        },
         { label: 'Về menu', onClick: () => this.scene.start('Menu') },
       ],
     });
   }
 
-  private loseLevel(): void {
+  private loseLevel(title: string, reason?: string): void {
     this.ended = true;
     this.select(null);
     saveBest(this.score);
     this.openDialog({
-      title: 'Hết giờ!',
-      body: `Bạn đạt ${this.score} điểm`,
+      title,
+      body: (reason ? `${reason}\n` : '') + `Bạn đạt ${this.score} điểm`,
       actions: [
         { label: 'Chơi lại', onClick: () => this.scene.restart({ level: this.levelIndex, score: 0 }) },
         { label: 'Về menu', onClick: () => this.scene.start('Menu') },
