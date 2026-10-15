@@ -1,8 +1,39 @@
 import Phaser from 'phaser';
 
-/** Kích thước logic của game; Phaser tự co giãn theo màn hình (Scale.FIT). */
-export const GAME_W = 720;
-export const GAME_H = 1280;
+/**
+ * Kích thước logic của game; Phaser tự co giãn theo màn hình (Scale.FIT).
+ * Màn dọc cố định 720x1280. Màn ngang cao 720, rộng theo tỉ lệ màn hình để lấp kín chiều ngang
+ * (giới hạn trong khoảng LANDSCAPE_MIN_W..LANDSCAPE_MAX_W, ngoài khoảng đó sẽ có viền).
+ * Khi xoay máy hay đổi tỉ lệ cửa sổ, main.ts đổi kích thước logic và các scene sắp xếp lại bố cục,
+ * nên bố cục trong scene luôn tính theo `scene.scale.width` / `scene.scale.height`.
+ */
+export const PORTRAIT_SIZE = { width: 720, height: 1280 };
+export const LANDSCAPE_H = 720;
+export const LANDSCAPE_MIN_W = 1100;
+export const LANDSCAPE_MAX_W = 1600;
+
+/** Kích thước logic hợp với khung hiển thị: ngang khi khung rộng hơn cao. */
+export function sizeFor(viewW: number, viewH: number): { width: number; height: number } {
+  if (viewW <= viewH) return PORTRAIT_SIZE;
+  const width = Phaser.Math.Clamp(Math.round((LANDSCAPE_H * viewW) / viewH), LANDSCAPE_MIN_W, LANDSCAPE_MAX_W);
+  return { width, height: LANDSCAPE_H };
+}
+
+export function isLandscape(scene: Phaser.Scene): boolean {
+  return scene.scale.width > scene.scale.height;
+}
+
+/** Gọi `fn` mỗi khi kích thước logic của game đổi (xoay máy, đổi tỉ lệ cửa sổ). Tự gỡ khi scene tắt. */
+export function onGameResize(scene: Phaser.Scene, fn: () => void): void {
+  let { width, height } = scene.scale;
+  const handler = () => {
+    if (scene.scale.width === width && scene.scale.height === height) return;
+    ({ width, height } = scene.scale);
+    fn();
+  };
+  scene.scale.on(Phaser.Scale.Events.RESIZE, handler);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.scale.off(Phaser.Scale.Events.RESIZE, handler));
+}
 
 export const FONT = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
@@ -12,6 +43,7 @@ export const C = {
   panel: 0x2c5266,
   accent: 0xffc857,
   disabled: 0x6b8796,
+  iconDim: 0xb8d0dc,
   path: 0xffe066,
   select: 0xffc857,
   hint: 0x7ae582,
@@ -86,6 +118,8 @@ export interface DialogOptions {
   actions: DialogAction[];
   /** Độ đậm của lớp phủ tối phía sau hộp thoại. */
   shade?: number;
+  /** Chiều rộng khung hộp thoại. */
+  width?: number;
   depth?: number;
 }
 
@@ -94,25 +128,27 @@ export interface DialogOptions {
  * Lớp phủ chặn mọi thao tác chạm xuống bên dưới. Trả về hàm đóng hộp thoại.
  */
 export function showDialog(scene: Phaser.Scene, opts: DialogOptions): () => void {
+  const W = scene.scale.width;
+  const H = scene.scale.height;
   const depth = opts.depth ?? 30;
-  const PANEL_W = GAME_W - 160;
+  const PANEL_W = opts.width ?? 560;
   const PAD = 52;
   const BTN_W = 320;
   const BTN_H = 70;
   const BTN_GAP = 18;
 
   const shade = scene.add
-    .rectangle(0, 0, GAME_W, GAME_H, 0x000000, opts.shade ?? 0.55)
+    .rectangle(0, 0, W, H, 0x000000, opts.shade ?? 0.55)
     .setOrigin(0)
     .setDepth(depth)
     .setInteractive();
   const title = scene.add
-    .text(GAME_W / 2, 0, opts.title, textStyle(56, C.textDark, 'bold'))
+    .text(W / 2, 0, opts.title, textStyle(56, C.textDark, 'bold'))
     .setOrigin(0.5, 0)
     .setDepth(depth + 2);
   const body = opts.body
     ? scene.add
-        .text(GAME_W / 2, 0, opts.body, {
+        .text(W / 2, 0, opts.body, {
           ...textStyle(30, '#2c5266'),
           align: 'center',
           lineSpacing: 8,
@@ -123,19 +159,23 @@ export function showDialog(scene: Phaser.Scene, opts: DialogOptions): () => void
     : null;
 
   const n = opts.actions.length;
-  const contentH = title.height + (body ? 24 + body.height : 0);
   const buttonsH = n * BTN_H + (n - 1) * BTN_GAP;
-  const panelH = PAD + contentH + 44 + buttonsH + PAD;
-  const top = Math.round((GAME_H - panelH) / 2);
+  const contentHeight = () => title.height + (body ? 24 + body.height : 0);
+  const panelHeight = () => PAD + contentHeight() + 44 + buttonsH + PAD;
+  // Nội dung dài trên màn ngang (thấp): thu nhỏ chữ cho tới khi vừa màn hình
+  for (let size = 30; body && panelHeight() > H - 48 && size > 18; ) body.setFontSize((size -= 2));
+  const contentH = contentHeight();
+  const panelH = panelHeight();
+  const top = Math.round((H - panelH) / 2);
 
   const panel = scene.add.graphics().setDepth(depth + 1);
-  panel.fillStyle(0xfffaf0, 1).fillRoundedRect(80, top, PANEL_W, panelH, 28);
+  panel.fillStyle(0xfffaf0, 1).fillRoundedRect(Math.round((W - PANEL_W) / 2), top, PANEL_W, panelH, 28);
   title.setY(top + PAD);
   body?.setY(title.y + title.height + 24);
 
   const firstBtnY = top + PAD + contentH + 44 + BTN_H / 2;
   const buttons = opts.actions.map(
-    (a, i) => new Button(scene, GAME_W / 2, firstBtnY + i * (BTN_H + BTN_GAP), BTN_W, BTN_H, a.label, a.onClick, depth + 2),
+    (a, i) => new Button(scene, W / 2, firstBtnY + i * (BTN_H + BTN_GAP), BTN_W, BTN_H, a.label, a.onClick, depth + 2),
   );
 
   return () => {

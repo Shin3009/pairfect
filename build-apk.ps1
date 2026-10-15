@@ -7,7 +7,7 @@
   Script tự động:
     1. Kiểm tra Node.js, Android SDK, JDK 21 (tự chọn đúng phiên bản Java trên máy)
     2. Cài thư viện npm nếu chưa có
-    3. Build code web và tạo/đồng bộ project Android (tự khóa màn hình dọc)
+    3. Build code web và tạo/đồng bộ project Android (cho phép xoay dọc/ngang)
     4. Build APK (debug hoặc release đã ký)
     5. Chép APK vào thư mục apk-output\ và (tùy chọn) cài lên điện thoại qua USB
 
@@ -278,18 +278,24 @@ $androidDir = Join-Path $Root 'android'
 if (-not (Test-Path $androidDir)) {
   Write-Step 'Tạo project Android (lần đầu)'
   Invoke-Tool 'npx.cmd' @('cap', 'add', 'android') 'Tạo project Android'
-
-  # Khóa màn hình dọc
-  $manifest = Join-Path $androidDir 'app\src\main\AndroidManifest.xml'
-  $xml = [IO.File]::ReadAllText($manifest)
-  if ($xml -notmatch 'screenOrientation') {
-    $xml = ([regex]'<activity').Replace($xml, '<activity android:screenOrientation="portrait"', 1)
-    [IO.File]::WriteAllText($manifest, $xml, (New-Object Text.UTF8Encoding $false))
-    Write-Ok 'Đã khóa màn hình dọc trong AndroidManifest.xml'
-  }
 } else {
   Write-Step 'Đồng bộ code mới sang Android'
   Invoke-Tool 'npx.cmd' @('cap', 'sync', 'android') 'Đồng bộ Capacitor'
+}
+
+# Cho phép xoay màn hình (game tự đổi bố cục dọc/ngang) nhưng vẫn theo khóa xoay của người dùng.
+# Chạy mỗi lần build để cập nhật cả project Android tạo từ bản cũ (khóa dọc).
+$manifest = Join-Path $androidDir 'app\src\main\AndroidManifest.xml'
+$xml = [IO.File]::ReadAllText($manifest)
+$orientation = 'android:screenOrientation="fullUser"'
+if ($xml -match 'android:screenOrientation="[^"]*"') {
+  $newXml = $xml -replace 'android:screenOrientation="[^"]*"', $orientation
+} else {
+  $newXml = ([regex]'<activity').Replace($xml, "<activity $orientation", 1)
+}
+if ($newXml -ne $xml) {
+  [IO.File]::WriteAllText($manifest, $newXml, (New-Object Text.UTF8Encoding $false))
+  Write-Ok 'Đã cho phép xoay màn hình (dọc/ngang) trong AndroidManifest.xml'
 }
 
 # Ghi đường dẫn SDK vào local.properties để Gradle và Android Studio dùng đúng SDK
