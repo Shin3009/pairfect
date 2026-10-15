@@ -55,7 +55,7 @@ export function textStyle(size: number, color: string, weight = 'normal'): Phase
 }
 
 /** Vùng chạm của nút. Chặn sự kiện để cú chạm không lọt xuống bàn chơi bên dưới. */
-function tapZone(
+export function tapZone(
   scene: Phaser.Scene,
   x: number,
   y: number,

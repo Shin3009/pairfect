@@ -60,24 +60,61 @@ Trước khi phát hành, nên làm thêm:
 - Thay icon và splash: dùng gói `@capacitor/assets` để sinh tự động từ một ảnh gốc.
 - Build bản phát hành: trong Android Studio chọn *Build → Generate Signed App Bundle / APK*. Google Play yêu cầu định dạng AAB.
 
+## Gửi kỷ lục lên Firebase
+
+Lần đầu mở game, người chơi được hỏi tên. Tên lưu trên máy và hiện ở góc trên bên trái menu; chạm vào đó để đổi tên. Kỷ lục trên máy (điểm cao nhất trên bảng xếp hạng) được đồng bộ lên Cloud Firestore, **mỗi người chơi một document** `highscores/<uid>`:
+
+| Trường | Ý nghĩa |
+| --- | --- |
+| `name` | Tên người chơi hiện tại (tối đa 20 ký tự); đổi tên thì cập nhật luôn |
+| `score` | Kỷ lục |
+| `stage` | Màn đang chơi lúc thua ở lượt đạt kỷ lục, đánh số từ 1 như trên HUD |
+| `updatedAt` | Thời điểm máy chủ nhận lần gửi gần nhất |
+
+`uid` là mã người chơi của Firebase Authentication: game tự đăng nhập ẩn danh (người chơi không phải nhập gì), phiên đăng nhập lưu trên máy nên lần sau mở app vẫn là người chơi cũ. Xóa dữ liệu app hoặc cài lại thì thành người chơi mới (document mới, document cũ vẫn còn).
+
+Game gửi khi có kỷ lục mới hoặc khi đổi tên. Mất mạng thì để đó và gửi lại khi có mạng, ở lần mở app sau hoặc sau lượt thua kế tiếp. Chưa cấu hình Firebase thì game vẫn chạy bình thường, chỉ không gửi.
+
+Cài đặt (làm một lần):
+
+1. Tạo project tại [Firebase Console](https://console.firebase.google.com).
+2. *Build → Authentication → Get started → Sign-in method*: bật **Anonymous**.
+3. *Build → Firestore Database → Create database*: chọn vùng gần người chơi (ví dụ `asia-southeast1`), chế độ production.
+4. Tab *Rules* của Firestore: dán nội dung file `firestore.rules` rồi bấm *Publish*.
+5. *Project settings → General → Your apps*: thêm một Web app (biểu tượng `</>`), chép hai giá trị `apiKey` và `projectId` trong `firebaseConfig`.
+6. Chép `.env.example` thành `.env.local` và điền hai giá trị đó. Chạy lại `npm run dev`, hoặc build lại APK.
+
+`.env.local` không được đưa lên git. Cấu hình này không phải bí mật (nó nằm sẵn trong APK); dữ liệu được bảo vệ bằng `firestore.rules`:
+
+- Ai cũng đọc được (để làm bảng xếp hạng chung).
+- Chỉ chính người chơi ghi được document của mình, kỷ lục chỉ được tăng, không ai xóa được.
+- Dữ liệu phải đúng định dạng, và điểm không được vượt mức có thể đạt tới màn đó: thua ở màn n thì tối đa n × 1500 điểm (`MAX_SCORE_PER_STAGE` trong `src/game/scoring.ts`; `npm test` kiểm tra mọi màn đều nằm dưới mức này và `firestore.rules` dùng đúng số này).
+
+Vẫn có thể bị gửi điểm giả nằm dưới mức đó, bằng cách gọi thẳng Firebase thay vì chơi. Muốn chặn hẳn thì cần Firebase App Check với Play Integrity (xem Gợi ý phát triển tiếp).
+
 ## Cấu trúc code
 
 ```
 src/
   main.ts               Khởi tạo Phaser (màn ngang cao 720, rộng theo tỉ lệ màn hình)
   native.ts             Nút Back của Android và việc app bị đưa xuống nền (plugin `@capacitor/app`)
+  online.ts             Đồng bộ kỷ lục lên Cloud Firestore (đăng nhập ẩn danh, gửi lại khi có mạng)
+  online.test.ts        Unit test cho việc gửi kỷ lục (Firebase giả)
   game/
     Board.ts            Toàn bộ logic: sinh bàn, đá chắn, tìm đường nối, gợi ý, đảo bàn, dồn ô
     Board.test.ts       Unit test cho logic
     levels.ts           Cấu hình các màn, vòng lặp vô tận và giai đoạn khó (xem docs/stages.md)
     levels.test.ts      Unit test cho cấu hình màn, tự chơi thử mọi màn
-    storage.ts          Lưu bảng xếp hạng vào localStorage (kỷ lục là điểm cao nhất trên bảng)
-    storage.test.ts     Unit test cho bảng xếp hạng
+    scoring.ts          Điểm mỗi cặp, thưởng thời gian, giới hạn điểm mỗi màn (firestore.rules dùng)
+    scoring.test.ts     Unit test: mọi màn nằm dưới giới hạn điểm, firestore.rules khớp
+    storage.ts          Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi, bản kỷ lục đã gửi
+    storage.test.ts     Unit test cho phần lưu trữ
     tileArt.ts          Vẽ hình cho ô và đá bằng code (tạm thời, thay bằng ảnh thật sau)
   scenes/
     ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
-    icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn) và Đảo bàn (mũi tên bắt chéo) bằng code
-    MenuScene.ts        Màn hình chính: Chơi (luôn từ màn 1), Bảng xếp hạng, Cách chơi
+    icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn), Đảo bàn (mũi tên bắt chéo) và Đổi tên (bút chì) bằng code
+    nameDialog.ts       Hộp nhập tên người chơi (HTML trong index.html, để gõ được tiếng Việt bằng bàn phím hệ thống)
+    MenuScene.ts        Màn hình chính: tên người chơi, Chơi (luôn từ màn 1), Bảng xếp hạng, Cách chơi
     LeaderboardScene.ts Bảng xếp hạng: 10 lượt chơi điểm cao nhất, kèm màn lúc thua và ngày chơi
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua
 ```
@@ -86,7 +123,7 @@ src/
 
 Luồng màn hình: `Menu` → `Game`, và `Menu` → `Leaderboard`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
 
-Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu (ở hộp thoại qua màn thì không làm gì, để lỡ tay không mất lượt chơi đang thắng); ở bảng xếp hạng thì về menu; ở menu thì đóng hộp thoại đang mở, hoặc hỏi có thoát game không.
+Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu (ở hộp thoại qua màn thì không làm gì, để lỡ tay không mất lượt chơi đang thắng); ở bảng xếp hạng thì về menu; ở menu thì đóng hộp thoại đang mở (kể cả hộp đổi tên; hộp nhập tên lần đầu thì bắt buộc nhập nên Back không làm gì), hoặc hỏi có thoát game không.
 
 Bảng xếp hạng chỉ lưu trên máy (localStorage), giữ 10 lượt chơi điểm cao nhất. Một lượt chơi được ghi khi **thua** (hết giờ hoặc hết nước đi), với điểm cuối cùng và màn đang chơi lúc thua; hộp thoại thua báo hạng nếu lọt vào bảng. Bỏ cuộc thì không ghi: rời màn từ menu tạm dừng (Chơi lại màn / Về menu), hoặc về menu sau khi qua màn. Bằng điểm thì màn xa hơn xếp trên, vẫn bằng thì lượt chơi trước xếp trên. "Kỷ lục" ở menu là điểm cao nhất trên bảng.
 
@@ -103,7 +140,7 @@ Mọi đường đi tối đa 2 lần rẽ đều có dạng `a → p → q → 
 ## Tùy chỉnh nhanh
 
 - **Độ khó, số màn:** sửa mảng `LEVELS` trong `src/game/levels.ts`. Lưu ý `rows * cols` phải là số chẵn, bàn nên rộng hơn cao (`cols > rows`), và `types` không vượt quá 40. `npm test` tự kiểm tra các điều kiện này và chơi thử hết mọi màn.
-- **Điểm, số lượt gợi ý/đảo, thưởng thời gian:** các hằng số đầu file `GameScene.ts`.
+- **Điểm, số lượt gợi ý/đảo, thưởng thời gian:** các hằng số đầu file `GameScene.ts` và `src/game/scoring.ts`. Tăng điểm mà vượt `MAX_SCORE_PER_STAGE` thì `npm test` báo lỗi: nâng giới hạn ở cả `scoring.ts` lẫn `firestore.rules`.
 - **Màu sắc giao diện:** đối tượng `C` trong `src/scenes/ui.ts`.
 - **Dùng hình ảnh thật thay cho hình vẽ bằng code:** thêm hàm `preload()` vào `MenuScene` (scene chạy đầu tiên) và load ảnh với key `tile-1`, `tile-2`, ... và `stone` cho đá (ví dụ `this.load.image('tile-1', 'assets/apple.png')`), sau đó bỏ các lời gọi `createTileTextures` trong `MenuScene` và `GameScene`. Ảnh nên là hình vuông, kích thước khoảng 128x128.
 
@@ -114,3 +151,5 @@ Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset
 - Âm thanh khi chọn, khi nối, khi qua màn (`this.load.audio` + `this.sound.play`).
 - Rung khi nối thành công: plugin `@capacitor/haptics`.
 - Quảng cáo / mua trong ứng dụng: các plugin cộng đồng của Capacitor cho AdMob và Google Play Billing.
+- Bảng xếp hạng chung: đọc collection `highscores` sắp theo `score` giảm dần (`firestore.rules` đã cho đọc), mỗi document là một người chơi.
+- Chặn điểm giả gửi thẳng lên Firebase: bật Firebase App Check với Play Integrity (cần plugin native cho Capacitor, đăng ký app Android trong Firebase và đưa app lên Google Play), rồi bật Enforce cho Firestore.

@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import { HARD_START } from '../game/levels';
-import { loadBest } from '../game/storage';
+import { loadBest, loadPlayerName } from '../game/storage';
 import { createTileTextures, MAX_TYPES, TEXTURE_SIZE, tileKey } from '../game/tileArt';
 import { exitApp, onBack } from '../native';
-import { Button, C, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
+import { syncBest } from '../online';
+import { iconTexture } from './icons';
+import { askPlayerName, nameDialogBack } from './nameDialog';
+import { Button, C, onGameResize, showDialog, tapZone, textStyle, type DialogOptions } from './ui';
 
 const HOW_TO_PLAY = [
   'Chạm hai ô có hình giống nhau để nối và xóa chúng.',
@@ -20,8 +23,13 @@ const HOW_TO_PLAY = [
 const DECOR_SIDE: [number, number][] = [[130, 150], [280, 260], [140, 450], [280, 590]];
 const DECOR_SIZE = 96;
 
+/** Thẻ tên người chơi ở góc trên bên trái; chạm vào để đổi tên. */
+const CHIP_H = 52;
+const CHIP_ICON = 26;
+
 export class MenuScene extends Phaser.Scene {
   private dialog: { opts: DialogOptions; close: () => void } | null = null;
+  private chip: { destroy(): void }[] = [];
 
   constructor() {
     super('Menu');
@@ -29,11 +37,16 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     this.dialog = null;
+    this.chip = [];
     createTileTextures(this);
     this.cameras.main.setBackgroundColor(C.bg).fadeIn(250, 31, 59, 77);
     onGameResize(this, () => this.scene.restart());
-    // Nút Back của Android: làm việc của hộp thoại đang mở, không có hộp thoại thì hỏi thoát game
-    onBack(this, () => (this.dialog ? this.dialog.opts.back?.() : this.confirmExit()));
+    // Nút Back của Android: làm việc của hộp nhập tên hay hộp thoại đang mở, không có hộp nào thì hỏi thoát game
+    onBack(this, () => {
+      if (nameDialogBack()) return;
+      if (this.dialog) this.dialog.opts.back?.();
+      else this.confirmExit();
+    });
 
     const W = this.scale.width;
     const x = W / 2;
@@ -46,6 +59,39 @@ export class MenuScene extends Phaser.Scene {
     new Button(this, x, 420, 420, 96, 'Chơi', () => this.scene.start('Game', { level: 0, score: 0 }), 1, 40);
     new Button(this, x, 530, 420, 80, 'Bảng xếp hạng', () => this.scene.start('Leaderboard'), 1, 32);
     new Button(this, x, 630, 420, 80, 'Cách chơi', () => this.showHowToPlay(), 1, 32);
+
+    this.drawPlayerChip();
+    // Lần đầu mở game: hỏi tên người chơi để ghi kèm kỷ lục
+    if (!loadPlayerName()) this.askName();
+  }
+
+  /** Hỏi tên (lần đầu) hoặc đổi tên, rồi vẽ lại thẻ tên và cập nhật tên trên kỷ lục online. */
+  private askName(): void {
+    void askPlayerName(loadPlayerName()).then((name) => {
+      if (!name) return;
+      void syncBest();
+      if (this.sys.isActive()) this.drawPlayerChip();
+    });
+  }
+
+  private drawPlayerChip(): void {
+    this.chip.forEach((o) => o.destroy());
+    this.chip = [];
+    const playerName = loadPlayerName();
+    if (!playerName) return;
+    const x = 24;
+    const cy = 24 + CHIP_H / 2;
+    const bg = this.add.graphics();
+    const name = this.add.text(x + 22, cy, playerName, textStyle(24, C.text, 'bold')).setOrigin(0, 0.5);
+    const iconX = name.x + name.width + 12;
+    const icon = this.add
+      .image(iconX + CHIP_ICON / 2, cy, iconTexture(this, 'edit'))
+      .setDisplaySize(CHIP_ICON, CHIP_ICON)
+      .setTint(C.iconDim);
+    const w = iconX + CHIP_ICON + 18 - x;
+    bg.fillStyle(C.panel, 1).fillRoundedRect(x, cy - CHIP_H / 2, w, CHIP_H, CHIP_H / 2);
+    const zone = tapZone(this, x + w / 2, cy, w, CHIP_H, 1, () => this.askName());
+    this.chip = [bg, name, icon, zone];
   }
 
   private showHowToPlay(): void {

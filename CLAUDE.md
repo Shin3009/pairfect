@@ -25,6 +25,8 @@ There is no linter configured.
 
 In dev mode, `main.ts` exposes `window.game`. Use `game.scene.getScene('Game')` in DevTools to inspect the live board, score and timer.
 
+Firebase config is read at build time from `VITE_FIREBASE_API_KEY` and `VITE_FIREBASE_PROJECT_ID` in `.env.local` (gitignored; template in `.env.example`, typed in `src/vite-env.d.ts`). Without them the game runs normally and simply doesn't upload scores. The Firebase project also needs the Anonymous sign-in provider enabled. `firestore.rules` is the matching Firestore security-rules file; it's pasted into the Firebase Console, not deployed by any script.
+
 ### Android
 
 - `build-apk.bat` (a wrapper for `build-apk.ps1`) is the one-command Windows build. It accepts `-Release`, `-Install`, `-SdkPath`, `-JdkPath`, `-KeystorePath` and `-KeyAlias`. It finds the Android SDK and a Java 21–24 JDK automatically, because Gradle 8.14 rejects newer JDKs bundled with recent Android Studio builds.
@@ -51,17 +53,33 @@ The code is split into a pure logic layer and a rendering layer:
 - **Scenes** run in the order `Menu` → `Game` (plus `Menu` → `Leaderboard` and back), and are registered in `main.ts`; the first in the list starts on launch. There is deliberately no stage select: every run starts at stage 1 (the old `LevelSelectScene` and its `pairfect-unlocked` progress were removed). Scenes switch with `this.scene.start(key, data)`. `Game` takes `{ level, score, hints, shuffles }` (`SceneData`) and moves to the next level with `this.scene.restart(...)`.
   - Hints and shuffles carry over like score: the next level gets the unused ones plus `HINTS_PER_LEVEL` / `SHUFFLES_PER_LEVEL`. Every way of starting a fresh run (menu, retry) omits them, so the player gets the base 3.
   - When a match leaves no move, `autoShuffle` spends one of the player's Shuffles. With none left, the level is lost ("Hết nước đi!"), the same way as running out of time.
-- **`src/scenes/GameScene.ts`** holds all gameplay: rendering, input, tweens, the HUD, the timer, pause, and the win/lose dialogs. Tuning constants sit at the top of the file: hints and shuffles per level, score per pair, and time bonus.
+- **`src/scenes/GameScene.ts`** holds all gameplay: rendering, input, tweens, the HUD, the timer, pause, and the win/lose dialogs. Tuning constants sit at the top of the file: hints and shuffles per level, and seconds added per match.
+  - Points live in **`src/game/scoring.ts`** (`SCORE_PER_PAIR`, `POINTS_PER_SECOND_LEFT`), because `firestore.rules` caps a score at `stage * MAX_SCORE_PER_STAGE` (1500). `scoring.test.ts` checks that no level, including the loop and hard phase, can exceed `maxStageScore`, and that the rules use the same number. If a scoring or level change breaks that test, raise the cap in both `scoring.ts` and `firestore.rules`.
   - Pausing sets `this.time.paused` and `this.tweens.paused` and shows a dialog in the same scene. Phaser keeps both flags when a scene restarts, so `create()` clears them with `setPaused(false)`. Any new way into or out of the scene must not leave them set.
   - The game also pauses itself when the app goes to the background (see `native.ts` below).
 - **`src/native.ts`** bridges the Android app (Capacitor `@capacitor/app`) to Phaser. `bindAppEvents` (called once in `main.ts`) re-emits the Back button and "app went to the background" as events on `game.events`; the background one also fires on Phaser's `HIDDEN` (page hidden), so it works in a browser tab too. Scenes subscribe with `onBack` / `onSuspend`, which unsubscribe on scene shutdown.
   - Registering a `backButton` listener disables Capacitor's default Back (leaving the app), so every scene must handle Back itself.
-  - Back is routed per scene: with a dialog open it calls that dialog's `DialogOptions.back` (no `back` means Back does nothing, used for the win dialog so a stray press can't end a winning run). With no dialog, `Game` pauses, `Leaderboard` returns to `Menu`, and `Menu` asks "Thoát game?" before `exitApp()`. `Game` and `Menu` track the open dialog as `{ opts, close }` for this.
+  - Back is routed per scene: with a dialog open it calls that dialog's `DialogOptions.back` (no `back` means Back does nothing, used for the win dialog so a stray press can't end a winning run). With no dialog, `Game` pauses, `Leaderboard` returns to `Menu`, and `Menu` asks "Thoát game?" before `exitApp()`. `Game` and `Menu` track the open dialog as `{ opts, close }` for this. `Menu` asks `nameDialogBack()` first, so Back cancels a rename and does nothing on the required first-run name prompt.
+- **`src/scenes/nameDialog.ts`** is the player-name prompt. It is plain HTML (`#name-dialog` in `index.html`), not Phaser, so the system keyboard can type Vietnamese. `askPlayerName(current)` is a singleton that resolves to the saved, cleaned name, or to `null` on cancel. With `current = null` it is the required first-run prompt, which `MenuScene.create` opens when `loadPlayerName()` is null; with a name it is a cancellable rename, opened from the name chip in the menu's top-left corner. After either, the menu calls `syncBest()` so the online row picks up the name.
+  - It lives outside the scenes on purpose: the soft keyboard can resize the game, which restarts the menu, and the dialog must survive that.
+  - Phaser hit-tests window-level touches even when they land outside the canvas, so the dialog stops propagation of touch, mouse and key events; otherwise a tap on it would also press the menu button underneath.
+  - Its CSS sizes everything in `--u` (one logical game pixel, `min(100vh / 720, 100vw / 1100)`) so it matches `showDialog`. It sits in the top half of the screen because a landscape soft keyboard covers the bottom.
+- **`src/online.ts`** keeps one Firestore row per player, `highscores/<uid>` = `{ name, score, stage, updatedAt }`, in sync with the device's best. `firebase/app`, `firebase/auth` and `firebase/firestore/lite` are loaded with dynamic imports on the first send, so they stay out of the main bundle.
+  - `uid` comes from Firebase Anonymous Auth. `initializeAuth` is used with IndexedDB persistence rather than `getAuth()`, which also loads the popup/redirect resolver. The session survives restarts, so the player keeps the same row.
+  - `syncBest()` compares the wanted row (current name plus `loadLeaderboard()[0]`, if its score is above 0) with the last successful upload (`loadSyncedBest()`), and uploads only when they differ. It runs at launch and on the window `online` event (`initOnline` in `main.ts`), after every loss (`GameScene.loseLevel`), and after the name is set or changed.
+  - On any error (offline, auth or rules) it logs a warning and leaves the synced marker unchanged, so the next trigger retries. Re-uploading is idempotent.
+  - While a sync is running, further calls return at once; when the upload finishes, the loop rechecks and sends anything newer.
+  - `firestore.rules` makes the collection world-readable. Only the owner (`request.auth.uid == uid`) can write their row; on update the score may not decrease; there are no deletes. Writes must have exactly those fields, an int `score` in `(0, stage * 1500]`, and `updatedAt == request.time`. The rules are checked against the Firestore emulator by hand, not by `npm test`.
 - **`src/scenes/ui.ts`** holds shared UI: the sizing helpers (`GAME_H`, `GAME_MIN_W` / `GAME_MAX_W`, `sizeFor`, `onGameResize`), the color palette `C`, `textStyle`, `Button`, `IconButton`, and `showDialog`.
   - **`src/scenes/icons.ts`** draws button icons with the Canvas 2D API on a 24×24 grid, in white, under the keys `icon-<name>`. `iconTexture(scene, name)` creates a texture on first use, and `IconButton` tints it.
   - `showDialog` adds a full-screen interactive shade that blocks taps underneath, and returns a function that closes it.
   - It shrinks the body font until the dialog fits the 720-high screen.
-- **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores only the leaderboard (`pairfect-leaderboard`). The high score (`loadBest`) is the leaderboard's top score; the old separate `pairfect-best` key is no longer read or written.
+- **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores three keys:
+  - the leaderboard (`pairfect-leaderboard`);
+  - the player name (`pairfect-player-name`, a plain string), which always goes through `cleanName` (NFC, control and bidi characters removed, at most `NAME_MAX` = 20 characters);
+  - the last row uploaded successfully (`pairfect-synced-best`, an `OnlineBest` `{ name, score, stage }`).
+
+  The high score (`loadBest`) is the leaderboard's top score; the old separate `pairfect-best` key is no longer read or written.
   - The leaderboard is local only: the top `LEADERBOARD_SIZE` (10) runs as `{ score, stage, date }`, where `stage` is 1-based like the HUD. Ties rank by higher stage, then the older run. `insertEntry` is the pure ranking step; `loadLeaderboard` drops malformed rows.
   - A run is recorded only when it is lost (`GameScene.loseLevel`: time out or no moves left), and the lose dialog shows the rank if it made the board. Giving up never records: leaving from the pause menu, or going to the menu from the win dialog. So a given-up run counts toward neither the leaderboard nor the high score.
   - `LeaderboardScene` shows the table, with a "Quay lại" button back to `Menu`.
@@ -100,6 +118,6 @@ The code is split into a pure logic layer and a rendering layer:
 
 `Board.test.ts` builds boards from string diagrams through `boardFrom(['12', '#.'])`, where `.` is empty, `#` is a stone, and digits are tile types. In those tests, coordinates are the padded ones, so the top-left tile is `P(1, 1)`.
 
-`storage.test.ts` stubs `localStorage` with `vi.stubGlobal`, because tests run in Node.
+`storage.test.ts` and `online.test.ts` stub `localStorage` with `vi.stubGlobal(fakeStorage())` (`src/test/fakeStorage.ts`), because tests run in Node. `online.test.ts` also mocks `firebase/app`, `firebase/auth` and `firebase/firestore/lite` with `vi.mock`, and sets the Firebase config with `vi.stubEnv`. That works because `online.ts` reads `import.meta.env` at call time.
 
 `Board.test.ts` and `levels.test.ts` auto-play full boards to a clear, under every gravity mode, with stones, and through the hard phase. Those tests use random boards, so rerun the suite a few times after changing generation, gravity or stones.

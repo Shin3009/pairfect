@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { bindAppEvents } from './native';
+import { initOnline } from './online';
 import { GameScene } from './scenes/GameScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { MenuScene } from './scenes/MenuScene';
@@ -42,6 +43,9 @@ game.events.once(Phaser.Core.Events.READY, fitViewport);
 
 // Nút Back của Android và việc app bị đưa xuống nền (xem native.ts)
 bindAppEvents(game);
+
+// Đồng bộ kỷ lục lên Firebase, gửi lại nếu lần chơi trước chưa gửi được (xem online.ts)
+initOnline();
 
 // Truy cập game từ DevTools khi phát triển: window.game.scene.getScene('Game')
 if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;

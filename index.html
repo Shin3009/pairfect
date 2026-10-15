@@ -22,10 +22,60 @@
         font: 600 24px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       }
       @media (orientation: portrait) { #rotate { display: flex; } }
+
+      /* Hộp nhập tên người chơi (src/scenes/nameDialog.ts), cùng kiểu với hộp thoại vẽ bằng Phaser (showDialog).
+         --u là một điểm ảnh logic của game (cao 720, rộng ít nhất 1100, xem ui.ts) để hộp to nhỏ theo game. */
+      #name-dialog {
+        --u: min(100vh / 720, 100vw / 1100);
+        position: fixed; inset: 0; z-index: 5;
+        display: flex; align-items: flex-start; justify-content: center;
+        /* Lệch lên trên: bàn phím ảo che nửa dưới màn hình ngang */
+        padding-top: calc(var(--u) * 90);
+        background: rgba(0, 0, 0, 0.55);
+        font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      #name-dialog[hidden], #name-dialog [hidden] { display: none; }
+      #name-dialog .panel {
+        width: calc(var(--u) * 640); box-sizing: border-box;
+        padding: calc(var(--u) * 36) calc(var(--u) * 44);
+        border-radius: calc(var(--u) * 28);
+        background: #fffaf0; color: #2c5266; text-align: center;
+      }
+      #name-dialog h1 { margin: 0; color: #1f3b4d; font-size: calc(var(--u) * 48); line-height: 1.2; }
+      #name-dialog p { margin: calc(var(--u) * 8) 0 calc(var(--u) * 28); font-size: calc(var(--u) * 26); }
+      #name-dialog .row { display: flex; gap: calc(var(--u) * 14); }
+      #name-dialog input, #name-dialog button {
+        height: calc(var(--u) * 64); box-sizing: border-box; margin: 0;
+        font: inherit; font-size: calc(var(--u) * 28);
+      }
+      #name-dialog input {
+        flex: 1; min-width: 0; padding: 0 calc(var(--u) * 20);
+        border: calc(var(--u) * 3) solid #b8d0dc; border-radius: calc(var(--u) * 16);
+        background: #fff; color: #1f3b4d; outline: none;
+      }
+      #name-dialog input:focus { border-color: #ffc857; }
+      #name-dialog button {
+        min-width: calc(var(--u) * 130); padding: 0 calc(var(--u) * 24);
+        border: 0; border-radius: calc(var(--u) * 32);
+        background: #ffc857; color: #1f3b4d; font-weight: bold;
+        cursor: pointer; -webkit-tap-highlight-color: transparent;
+      }
+      #name-dialog button:disabled { background: #6b8796; cursor: default; }
     </style>
   </head>
   <body>
     <div id="game"></div>
+    <form id="name-dialog" hidden autocomplete="off">
+      <div class="panel">
+        <h1 id="name-title"></h1>
+        <p id="name-body"></p>
+        <div class="row">
+          <input id="name-input" type="text" placeholder="Tên của bạn" enterkeyhint="done" autocapitalize="words" spellcheck="false" />
+          <button id="name-cancel" type="button">Hủy</button>
+          <button id="name-ok" type="submit">Lưu</button>
+        </div>
+      </div>
+    </form>
     <div id="rotate">Xoay ngang thiết bị để chơi</div>
     <script type="module" src="/src/main.ts"></script>
   </body>

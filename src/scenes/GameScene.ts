@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import { Board, same, type Gravity, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, textureFor, TEXTURE_SIZE } from '../game/tileArt';
+import { POINTS_PER_SECOND_LEFT, SCORE_PER_PAIR } from '../game/scoring';
 import { addToLeaderboard } from '../game/storage';
 import { onBack, onSuspend } from '../native';
+import { syncBest } from '../online';
 import { Button, C, IconButton, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
 /**
@@ -27,7 +29,7 @@ const RING = 0.4;
 /** Lượt Gợi ý / Đảo bàn được cộng thêm khi vào mỗi màn; lượt chưa dùng mang sang màn sau. */
 const HINTS_PER_LEVEL = 3;
 const SHUFFLES_PER_LEVEL = 3;
-const SCORE_PER_PAIR = 10;
+// Điểm mỗi cặp và điểm thưởng thời gian nằm trong game/scoring.ts (firestore.rules dựa vào chúng)
 const TIME_BONUS_PER_PAIR = 1; // giây cộng thêm mỗi lần ăn cặp
 
 /** Mũi tên chỉ hướng dồn kế tiếp của kiểu Xoay vòng. */
@@ -496,7 +498,7 @@ export class GameScene extends Phaser.Scene {
   private winLevel(): void {
     if (this.ended) return;
     this.ended = true;
-    const bonus = Math.ceil(this.timeLeft) * 2;
+    const bonus = Math.ceil(this.timeLeft) * POINTS_PER_SECOND_LEFT;
     this.score += bonus;
     this.refreshHud();
     this.openDialog({
@@ -529,6 +531,8 @@ export class GameScene extends Phaser.Scene {
     this.select(null);
     // Bỏ cuộc (rời màn từ menu tạm dừng, về menu sau khi qua màn) thì không ghi
     const rank = addToLeaderboard(this.score, this.levelIndex + 1);
+    // Có kỷ lục mới thì gửi lên mạng (cũng gửi lại nếu lần trước gửi lỗi)
+    void syncBest();
     this.openDialog({
       title,
       body:

@@ -1,29 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeStorage } from '../test/fakeStorage';
 import {
   addToLeaderboard,
+  cleanName,
   insertEntry,
   LEADERBOARD_SIZE,
   loadBest,
   loadLeaderboard,
+  loadPlayerName,
+  loadSyncedBest,
+  NAME_MAX,
+  savePlayerName,
+  saveSyncedBest,
   type LeaderboardEntry,
+  type OnlineBest,
 } from './storage';
 
 const KEY = 'pairfect-leaderboard';
-
-/** localStorage giả lưu trong bộ nhớ (môi trường test là Node, không có trình duyệt). */
-function fakeStorage(): Storage {
-  const data = new Map<string, string>();
-  return {
-    get length() {
-      return data.size;
-    },
-    clear: () => data.clear(),
-    getItem: (k) => data.get(k) ?? null,
-    key: (i) => [...data.keys()][i] ?? null,
-    removeItem: (k) => void data.delete(k),
-    setItem: (k, v) => void data.set(k, String(v)),
-  };
-}
 
 const E = (score: number, stage: number, date = 0): LeaderboardEntry => ({ score, stage, date });
 
@@ -104,5 +97,73 @@ describe('bảng xếp hạng trong localStorage', () => {
     expect(loadLeaderboard()).toEqual([]);
     expect(loadBest()).toBe(0);
     expect(addToLeaderboard(100, 1)).toBe(1);
+  });
+});
+
+describe('cleanName', () => {
+  it('gộp khoảng trắng và bỏ khoảng trắng hai đầu', () => {
+    expect(cleanName('  Nguyễn   Văn\tAn  ')).toBe('Nguyễn Văn An');
+  });
+
+  it('chỉ có khoảng trắng hay ký tự điều khiển thì rỗng', () => {
+    expect(cleanName('')).toBe('');
+    expect(cleanName(' \n\t ')).toBe('');
+    expect(cleanName('\u0000\u202E')).toBe('');
+  });
+
+  it('bỏ ký tự điều khiển và ký tự đảo chiều chữ', () => {
+    expect(cleanName('An\u0007h\u202Eoà')).toBe('An h oà');
+  });
+
+  it('đưa chữ có dấu về dạng dựng sẵn (NFC)', () => {
+    expect(cleanName('Hoa\u0300')).toBe('Hoà');
+  });
+
+  it(`cắt còn ${NAME_MAX} ký tự, emoji tính là một ký tự`, () => {
+    expect(cleanName('a'.repeat(NAME_MAX + 5))).toBe('a'.repeat(NAME_MAX));
+    expect(Array.from(cleanName('😀'.repeat(NAME_MAX + 1)))).toHaveLength(NAME_MAX);
+    // Cắt ngay sau một khoảng trắng thì bỏ luôn khoảng trắng đó
+    expect(cleanName('a'.repeat(NAME_MAX - 1) + ' bcd')).toBe('a'.repeat(NAME_MAX - 1));
+  });
+});
+
+describe('tên người chơi trong localStorage', () => {
+  beforeEach(() => vi.stubGlobal('localStorage', fakeStorage()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('chưa nhập tên thì null', () => {
+    expect(loadPlayerName()).toBeNull();
+  });
+
+  it('lưu tên đã chuẩn hóa, đổi tên thì ghi đè', () => {
+    expect(savePlayerName('  An  ')).toBe('An');
+    expect(loadPlayerName()).toBe('An');
+    savePlayerName('Bình');
+    expect(loadPlayerName()).toBe('Bình');
+  });
+
+  it('tên lưu trong máy bị sửa thành rỗng thì coi như chưa nhập', () => {
+    localStorage.setItem('pairfect-player-name', '  \u202E ');
+    expect(loadPlayerName()).toBeNull();
+  });
+});
+
+describe('kỷ lục đã gửi lên mạng trong localStorage', () => {
+  beforeEach(() => vi.stubGlobal('localStorage', fakeStorage()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  const B: OnlineBest = { name: 'An', score: 420, stage: 5 };
+
+  it('chưa gửi lần nào thì null; lưu rồi đọc lại', () => {
+    expect(loadSyncedBest()).toBeNull();
+    saveSyncedBest(B);
+    expect(loadSyncedBest()).toEqual(B);
+  });
+
+  it('dữ liệu hỏng thì coi như chưa gửi', () => {
+    localStorage.setItem('pairfect-synced-best', JSON.stringify({ ...B, score: '420' }));
+    expect(loadSyncedBest()).toBeNull();
+    localStorage.setItem('pairfect-synced-best', '{hỏng');
+    expect(loadSyncedBest()).toBeNull();
   });
 });

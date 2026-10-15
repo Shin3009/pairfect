@@ -4,7 +4,7 @@ import Phaser from 'phaser';
  * Biểu tượng cho các nút, vẽ bằng Canvas 2D giống hình các ô (xem tileArt.ts), không cần file ảnh.
  * Hình vẽ màu trắng trên khung 24x24 rồi phóng lên ICON_SIZE; khi hiển thị thì tô màu bằng setTint.
  */
-export type IconName = 'hint' | 'shuffle';
+export type IconName = 'hint' | 'shuffle' | 'edit';
 
 const ICON_SIZE = 64;
 
@@ -58,6 +58,21 @@ const DRAW: Record<IconName, (ctx: CanvasRenderingContext2D) => void> = {
     curve(7, 17);
     ctx.stroke();
     head(17);
+  },
+  // Bút chì nằm chéo, ngòi chỉ xuống góc dưới bên trái
+  edit: (ctx) => {
+    ctx.translate(12, 12);
+    ctx.rotate(-Math.PI / 4);
+    // Thân bút và đầu tẩy, cách nhau một khe nhỏ
+    ctx.fillRect(-5.6, -2.8, 10.4, 5.6);
+    ctx.fillRect(6.2, -2.8, 3.2, 5.6);
+    // Ngòi
+    ctx.beginPath();
+    ctx.moveTo(-5.6, -2.8);
+    ctx.lineTo(-10.6, 0);
+    ctx.lineTo(-5.6, 2.8);
+    ctx.closePath();
+    ctx.fill();
   },
 };
 
