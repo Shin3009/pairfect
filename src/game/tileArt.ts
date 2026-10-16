@@ -7,11 +7,26 @@ import { loadTileArt } from './storage';
  * Hình cho các ô. Người chơi chọn một bộ hình ở menu (TileArtScene); có các bộ vẽ bằng code
  * và các bộ ảnh đặt trong src/assets/tiles (xem imagePacks.ts).
  * Mỗi bộ có texture riêng `tile-<mã bộ>-<loại>`, vẽ ở lần dùng đầu; đá (`stone`) dùng chung.
+ * Ô trên bàn có thể cao hơn rộng (xem textureHeight): khi đó khóa có thêm đuôi `-h<chiều cao>`.
  */
 
 export const TEXTURE_SIZE = 128;
 export const MAX_TYPES = 40;
 export const STONE_KEY = 'stone';
+
+/** Chiều cao texture tăng theo bậc này, để chỉ phải vẽ vài cỡ ô cao dù tỉ lệ màn hình là bao nhiêu. */
+const TALL_STEP = 8;
+
+/**
+ * Chiều cao texture cho ô có tỉ lệ cao / rộng `aspect` (>= 1); chiều rộng luôn là TEXTURE_SIZE.
+ * Làm tròn xuống theo bậc TALL_STEP nên ô không bao giờ cao quá tỉ lệ đã cho.
+ */
+export function textureHeight(aspect: number): number {
+  return TEXTURE_SIZE + TALL_STEP * Math.max(0, Math.floor((TEXTURE_SIZE * (aspect - 1)) / TALL_STEP + 1e-9));
+}
+
+/** Khóa texture cỡ cao `h`: ô vuông giữ khóa gốc. */
+const sized = (key: string, h: number) => (h === TEXTURE_SIZE ? key : `${key}-h${h}`);
 
 /** Cạnh của khung vuông mà emoji hoặc ảnh được phóng cho vừa. */
 const FACE_BOX = TEXTURE_SIZE * 0.66;
@@ -288,20 +303,23 @@ function fillRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w:
 }
 
 /**
- * Khóa texture của loại `type` trong bộ `art`; vẽ ở lần dùng đầu.
+ * Khóa texture của loại `type` trong bộ `art`, cao `h` (xem textureHeight); vẽ ở lần dùng đầu.
  * Bộ ảnh thì nền ô hiện ngay, hình được vẽ thêm khi ảnh tải xong.
  */
-export function artTexture(scene: Phaser.Scene, art: TileArt, type: number): string {
-  const key = `tile-${art.id}-${type}`;
+export function artTexture(scene: Phaser.Scene, art: TileArt, type: number, h = TEXTURE_SIZE): string {
+  const key = sized(`tile-${art.id}-${type}`, h);
   if (scene.textures.exists(key)) return key;
-  const tex = scene.textures.createCanvas(key, TEXTURE_SIZE, TEXTURE_SIZE)!;
+  const tex = scene.textures.createCanvas(key, TEXTURE_SIZE, h)!;
   const ctx = tex.getContext();
   const S = TEXTURE_SIZE;
   // Bóng đổ + nền ô
   ctx.fillStyle = '#c9b79c';
-  fillRoundedRect(ctx, 4, 10, S - 8, S - 12, 18);
+  fillRoundedRect(ctx, 4, 10, S - 8, h - 12, 18);
   ctx.fillStyle = '#fffaf0';
-  fillRoundedRect(ctx, 4, 2, S - 8, S - 12, 18);
+  fillRoundedRect(ctx, 4, 2, S - 8, h - 12, 18);
+  // Các hàm vẽ hình chỉ biết ô vuông S x S: dời xuống để hình nằm giữa nền ô cao.
+  // Dời trước save() để lệnh vẽ ảnh chạy sau (khi ảnh tải xong, sau restore()) vẫn được dời.
+  ctx.translate(0, (h - S) / 2);
   ctx.save();
   const done = art.draw(ctx, type);
   if (done) void done.then(() => tex.refresh());
@@ -310,39 +328,47 @@ export function artTexture(scene: Phaser.Scene, art: TileArt, type: number): str
   return key;
 }
 
-/** Khóa texture của loại `type` trong bộ hình đang dùng. */
-export function tileKey(type: number): string {
-  return `tile-${current.id}-${type}`;
+/** Khóa texture của loại `type` trong bộ hình đang dùng, cao `h`. */
+export function tileKey(type: number, h = TEXTURE_SIZE): string {
+  return sized(`tile-${current.id}-${type}`, h);
 }
 
-/** Khóa texture cho một giá trị trên bàn: ô hình hoặc đá. */
-export function textureFor(value: number): string {
-  return value === STONE ? STONE_KEY : tileKey(value);
+/** Khóa texture cho một giá trị trên bàn: ô hình hoặc đá, cao `h`. */
+export function textureFor(value: number, h = TEXTURE_SIZE): string {
+  return value === STONE ? sized(STONE_KEY, h) : tileKey(value, h);
 }
 
 const poly = (g: Phaser.GameObjects.Graphics, pts: Pt[]) =>
   g.fillPoints(pts.map(([x, y]) => new Phaser.Math.Vector2(x, y)), true);
 
 /** Đá chắn đường: khối xám có vết nứt, khác hẳn nền kem của ô hình. Dùng chung cho mọi bộ hình. */
-function createStoneTexture(scene: Phaser.Scene): void {
-  if (scene.textures.exists(STONE_KEY)) return;
+function createStoneTexture(scene: Phaser.Scene, h: number): void {
+  const key = sized(STONE_KEY, h);
+  if (scene.textures.exists(key)) return;
   const S = TEXTURE_SIZE;
   const g = scene.add.graphics();
-  g.fillStyle(0x3d474f, 1).fillRoundedRect(4, 10, S - 8, S - 12, 18);
-  g.fillStyle(0x7b8790, 1).fillRoundedRect(4, 2, S - 8, S - 12, 18);
+  g.fillStyle(0x3d474f, 1).fillRoundedRect(4, 10, S - 8, h - 12, 18);
+  g.fillStyle(0x7b8790, 1).fillRoundedRect(4, 2, S - 8, h - 12, 18);
+  // Mặt sáng và vết nứt vẽ cho ô vuông, dời xuống giữa ô cao
+  g.translateCanvas(0, (h - S) / 2);
   // Mặt sáng phía trên bên trái cho cảm giác khối đá
   g.fillStyle(0x95a1a9, 1);
   poly(g, [[18, 14], [80, 12], [62, 40], [16, 52]]);
   g.lineStyle(5, 0x4b555d, 1);
   g.beginPath().moveTo(34, 30).lineTo(56, 56).lineTo(46, 78).lineTo(66, 102).strokePath();
   g.beginPath().moveTo(56, 56).lineTo(88, 48).lineTo(104, 64).strokePath();
-  g.generateTexture(STONE_KEY, S, S);
+  g.generateTexture(key, S, h);
   g.destroy();
 }
 
-/** Chốt bộ hình đang chọn cho tileKey / textureFor và vẽ sẵn mọi loại của bộ đó. */
+/** Chốt bộ hình đang chọn cho tileKey / textureFor và vẽ sẵn mọi loại của bộ đó (ô vuông). */
 export function createTileTextures(scene: Phaser.Scene): void {
-  createStoneTexture(scene);
   current = selectedTileArt();
-  for (let t = 1; t <= MAX_TYPES; t++) artTexture(scene, current, t);
+  ensureTileTextures(scene, TEXTURE_SIZE);
+}
+
+/** Vẽ sẵn mọi loại của bộ hình đang dùng và đá, cỡ cao `h` (xem textureHeight). Đã có thì thôi. */
+export function ensureTileTextures(scene: Phaser.Scene, h: number): void {
+  createStoneTexture(scene, h);
+  for (let t = 1; t <= MAX_TYPES; t++) artTexture(scene, current, t, h);
 }

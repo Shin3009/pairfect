@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Board, same, type Gravity, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
-import { createTileTextures, textureFor, TEXTURE_SIZE } from '../game/tileArt';
+import { createTileTextures, ensureTileTextures, textureFor, textureHeight, TEXTURE_SIZE } from '../game/tileArt';
 import { POINTS_PER_SECOND_LEFT, SCORE_PER_PAIR } from '../game/scoring';
 import { addToLeaderboard } from '../game/storage';
 import { onBack, onSuspend } from '../native';
@@ -26,6 +26,12 @@ const MARGIN = 12;
  * để ô hình chiếm gần hết chiều ngang màn hình.
  */
 const RING = 0.4;
+/**
+ * Ô cao nhất bao nhiêu lần bề rộng. Bàn chơi rộng và thấp nên trên màn hình không quá dài
+ * (máy tính bảng 5:3, 16:10) ô vuông chạm hai mép trái phải mà trên dưới còn trống nhiều:
+ * khi đó ô được kéo cao lên (như quân mạt chược) để lấp chỗ trống. Hình trên ô vẫn giữ vuông.
+ */
+const MAX_TILE_ASPECT = 1.25;
 /** Lượt Gợi ý / Đảo bàn được cộng thêm khi vào mỗi màn; lượt chưa dùng mang sang màn sau. */
 const HINTS_PER_LEVEL = 3;
 const SHUFFLES_PER_LEVEL = 3;
@@ -57,9 +63,14 @@ export class GameScene extends Phaser.Scene {
   private board!: Board;
 
   private sprites: (Phaser.GameObjects.Image | null)[][] = [];
-  private cell = 0;
-  /** Bề rộng vòng ô trống quanh bàn, tính bằng điểm ảnh (xem RING). */
-  private ring = 0;
+  /** Cỡ một ô trên màn hình; ô có thể cao hơn rộng (xem MAX_TILE_ASPECT). */
+  private cellW = 0;
+  private cellH = 0;
+  /** Chiều cao texture ô đang dùng (rộng luôn là TEXTURE_SIZE), khớp tỉ lệ cellH / cellW. */
+  private texH = TEXTURE_SIZE;
+  /** Bề rộng vòng ô trống quanh bàn ở cạnh trái/phải và trên/dưới, tính bằng điểm ảnh (xem RING). */
+  private ringX = 0;
+  private ringY = 0;
   /** Góc trên bên trái của bàn, tính cả vòng ô trống. */
   private originX = 0;
   private originY = 0;
@@ -143,19 +154,29 @@ export class GameScene extends Phaser.Scene {
     const area: Rect = { x: 0, y: HUD_H, w: W, h: H - HUD_H };
     const { rows, cols } = this.board;
     // Mỗi chiều có thêm hai vòng ô trống (mỗi vòng RING cạnh ô) để vẽ đường nối vòng ra ngoài
-    this.cell = Math.floor(
-      Math.min((area.w - MARGIN * 2) / (cols + 2 * RING), (area.h - MARGIN * 2) / (rows + 2 * RING)),
-    );
-    this.ring = Math.round(this.cell * RING);
-    this.originX = Math.round(area.x + (area.w - (this.cell * cols + this.ring * 2)) / 2);
-    this.originY = Math.round(area.y + (area.h - (this.cell * rows + this.ring * 2)) / 2);
+    const fitW = (area.w - MARGIN * 2) / (cols + 2 * RING);
+    const fitH = (area.h - MARGIN * 2) / (rows + 2 * RING);
+    this.cellW = Math.floor(Math.min(fitW, fitH));
+    // Còn dư chiều cao thì kéo ô cao lên; texture cao theo bậc nên tỉ lệ làm tròn xuống theo texture
+    this.texH = textureHeight(Math.min(MAX_TILE_ASPECT, fitH / this.cellW));
+    this.cellH = Math.floor((this.cellW * this.texH) / TEXTURE_SIZE);
+    ensureTileTextures(this, this.texH);
+    this.ringX = Math.round(this.cellW * RING);
+    this.ringY = Math.round(this.cellH * RING);
+    this.originX = Math.round(area.x + (area.w - (this.cellW * cols + this.ringX * 2)) / 2);
+    this.originY = Math.round(area.y + (area.h - (this.cellH * rows + this.ringY * 2)) / 2);
+  }
+
+  /** Tỉ lệ phóng (đều hai chiều) của texture ô: chừa 1 điểm ảnh mỗi bên giữa hai ô cạnh nhau. */
+  private tileScale(): number {
+    return (this.cellW - 2) / TEXTURE_SIZE;
   }
 
   /** Tỉ lệ màn hình đổi giữa màn (chia đôi màn hình, kéo cửa sổ): giữ nguyên trạng thái, chỉ sắp xếp lại bố cục. */
   private relayout(): void {
     this.layoutBoard();
 
-    const scale = (this.cell - 2) / TEXTURE_SIZE;
+    const scale = this.tileScale();
     for (let r = 1; r <= this.board.rows; r++)
       for (let c = 1; c <= this.board.cols; c++) {
         const img = this.sprites[r][c];
@@ -163,7 +184,7 @@ export class GameScene extends Phaser.Scene {
         // Bỏ dở hiệu ứng đang chạy (xuất hiện, dồn ô, lật hình...) và đặt ô thẳng về trạng thái cuối
         this.tweens.killTweensOf(img);
         const { x, y } = this.cellCenter({ r, c });
-        img.setPosition(x, y).setTexture(textureFor(this.board.grid[r][c])).setScale(scale).setAngle(0);
+        img.setPosition(x, y).setTexture(textureFor(this.board.grid[r][c], this.texH)).setScale(scale).setAngle(0);
       }
     this.pathGfx.clear();
     this.select(this.selected);
@@ -179,32 +200,30 @@ export class GameScene extends Phaser.Scene {
 
   /** Tâm của ô (r, c) trên màn hình; hàng/cột 0 và rows+1/cols+1 nằm giữa vòng ô trống hẹp. */
   private cellCenter(p: Point): { x: number; y: number } {
-    const axis = (i: number, n: number) => {
-      if (i <= 0) return this.ring / 2;
-      if (i > n) return this.ring + n * this.cell + this.ring / 2;
-      return this.ring + (i - 0.5) * this.cell;
+    const axis = (i: number, n: number, cell: number, ring: number) => {
+      if (i <= 0) return ring / 2;
+      if (i > n) return ring + n * cell + ring / 2;
+      return ring + (i - 0.5) * cell;
     };
     return {
-      x: this.originX + axis(p.c, this.board.cols),
-      y: this.originY + axis(p.r, this.board.rows),
+      x: this.originX + axis(p.c, this.board.cols, this.cellW, this.ringX),
+      y: this.originY + axis(p.r, this.board.rows, this.cellH, this.ringY),
     };
   }
 
   private createTiles(): void {
     const { rows, cols } = this.board;
-    const size = this.cell - 2;
     this.sprites = Array.from({ length: rows + 2 }, () => new Array(cols + 2).fill(null));
     for (let r = 1; r <= rows; r++)
       for (let c = 1; c <= cols; c++) {
         const v = this.board.grid[r][c];
         if (!v) continue;
         const { x, y } = this.cellCenter({ r, c });
-        const img = this.add.image(x, y, textureFor(v)).setDisplaySize(size, size);
         // Hiệu ứng xuất hiện
-        img.setScale(0);
+        const img = this.add.image(x, y, textureFor(v, this.texH)).setScale(0);
         this.tweens.add({
           targets: img,
-          scale: size / TEXTURE_SIZE,
+          scale: this.tileScale(),
           duration: 250,
           delay: (r + c) * 18,
           ease: 'Back.Out',
@@ -299,10 +318,12 @@ export class GameScene extends Phaser.Scene {
   private drawFrame(g: Phaser.GameObjects.Graphics, points: Point[], color: number): void {
     g.clear();
     g.lineStyle(5, color, 1);
+    // Khung ôm đúng ô đang hiện (cả phần bóng đổ ở đáy texture)
+    const w = TEXTURE_SIZE * this.tileScale();
+    const h = this.texH * this.tileScale();
     for (const p of points) {
       const { x, y } = this.cellCenter(p);
-      const s = this.cell - 2;
-      g.strokeRoundedRect(x - s / 2, y - s / 2, s, s, 10);
+      g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 10);
     }
   }
 
@@ -311,8 +332,8 @@ export class GameScene extends Phaser.Scene {
   private onPointer(p: Phaser.Input.Pointer): void {
     if (this.ended || this.paused) return;
     // Chạm vào vòng ô trống cho ra hàng/cột 0 hoặc rows+1/cols+1, bị isInside loại ra
-    const c = Math.floor((p.worldX - this.originX - this.ring) / this.cell) + 1;
-    const r = Math.floor((p.worldY - this.originY - this.ring) / this.cell) + 1;
+    const c = Math.floor((p.worldX - this.originX - this.ringX) / this.cellW) + 1;
+    const r = Math.floor((p.worldY - this.originY - this.ringY) / this.cellH) + 1;
     const pt = { r, c };
     // Ô trống và đá không chọn được
     if (!this.board.isInside(pt) || this.board.get(pt) <= 0) return;
@@ -455,13 +476,13 @@ export class GameScene extends Phaser.Scene {
         const img = this.sprites[r][c];
         const v = this.board.grid[r][c];
         if (!img || v <= 0) continue;
-        const sx = (this.cell - 2) / TEXTURE_SIZE;
+        const sx = this.tileScale();
         this.tweens.add({
           targets: img,
           scaleX: 0,
           duration: 120,
           yoyo: true,
-          onYoyo: () => img.setTexture(textureFor(v)),
+          onYoyo: () => img.setTexture(textureFor(v, this.texH)),
           onComplete: () => img.setScale(sx),
         });
       }
