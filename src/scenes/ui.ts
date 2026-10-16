@@ -180,6 +180,11 @@ export interface DialogOptions {
   /** Căn lề nội dung; mặc định giữa. Danh sách dài (như ghi công) đọc dễ hơn khi căn trái. */
   bodyAlign?: 'left' | 'center';
   depth?: number;
+  /**
+   * Bỏ qua chạm vào các nút trong chừng này mili giây đầu. Dùng cho hộp hiện bất ngờ lúc người chơi đang chạm
+   * liên tục (kết quả trận đấu online), để cú chạm định dành cho bàn chơi không bấm nhầm nút.
+   */
+  ignoreTapsMs?: number;
 }
 
 /**
@@ -233,8 +238,19 @@ export function showDialog(scene: Phaser.Scene, opts: DialogOptions): () => void
   body?.setY(title.y + title.height + 24);
 
   const firstBtnY = top + PAD + contentH + 44 + BTN_H / 2;
+  const armedAt = Date.now() + (opts.ignoreTapsMs ?? 0);
   const buttons = opts.actions.map(
-    (a, i) => new Button(scene, W / 2, firstBtnY + i * (BTN_H + BTN_GAP), BTN_W, BTN_H, a.label, a.onClick, depth + 2),
+    (a, i) =>
+      new Button(
+        scene,
+        W / 2,
+        firstBtnY + i * (BTN_H + BTN_GAP),
+        BTN_W,
+        BTN_H,
+        a.label,
+        () => Date.now() >= armedAt && a.onClick(),
+        depth + 2,
+      ),
   );
 
   return () => {

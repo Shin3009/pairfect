@@ -140,6 +140,22 @@ describe('đá', () => {
       expect(b.remaining()).toBe(86);
     }
   });
+
+  it('dropStone đặt đá vào ô trống không kề đá nào', () => {
+    const b = boardFrom(['....', '.#..', '..11']);
+    const p = b.dropStone()!;
+    expect(p).not.toBeNull();
+    expect(b.get(p)).toBe(STONE);
+    // Chỉ còn ô (1, 4) và (2, 4) không kề viên đá ở (2, 2)
+    expect([P(1, 4), P(2, 4)]).toContainEqual(p);
+    expect(b.remaining()).toBe(2);
+  });
+
+  it('dropStone trả về null khi không còn ô nào đặt được', () => {
+    const b = boardFrom(['#.11', '..22']);
+    expect(b.dropStone()).toBeNull();
+    expect(b.grid).toEqual(boardFrom(['#.11', '..22']).grid);
+  });
 });
 
 describe('load', () => {

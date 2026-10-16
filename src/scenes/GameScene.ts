@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Board, same, type Gravity, type Point } from '../game/Board';
+import { Board, same, STONE, type Gravity, type Move, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, ensureTileTextures, MAX_TYPES, textureFor, textureHeight, TEXTURE_SIZE } from '../game/tileArt';
 import { POINTS_PER_SECOND_LEFT, SCORE_PER_PAIR } from '../game/scoring';
@@ -14,11 +14,15 @@ import {
 } from '../game/storage';
 import { onBack, onSuspend } from '../native';
 import { syncBest } from '../online';
+import { FOG_MS, type AttackKind, type HitEffect } from '../pvp/attacks';
+import { PVP_HINTS, PVP_SHUFFLES, type Match, type Outcome } from '../pvp/match';
+import type { PvpSession } from '../pvp/session';
 import { Button, C, IconButton, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
 
 /**
  * Thanh HUD mỏng một hàng phía trên, nhường tối đa chiều cao cho bàn chơi:
  * [Màn][Kiểu dồn][Gợi ý][Đảo bàn][Dừng][Thanh thời gian][Điểm].
+ * Đấu online: [Số cặp còn lại][Kiểu dồn][Gợi ý][Đảo bàn][Đầu hàng][Thanh thời gian][Tên, số cặp và bàn thu nhỏ của đối thủ].
  * Gợi ý (bóng đèn) và Đảo bàn (mũi tên bắt chéo) là nút biểu tượng, số lượt còn lại hiện ở huy hiệu góc nút.
  * Kỷ lục (điểm cao nhất trên bảng xếp hạng) không hiện trong HUD, chỉ hiện ở menu.
  */
@@ -27,6 +31,10 @@ const HUD_H = 80;
 const HUD_BTN = 44;
 /** Chỗ dành sẵn cho điểm ở góc phải, để thanh thời gian không co giãn khi điểm tăng. */
 const SCORE_W = 160;
+/** Đấu online: chỗ dành cho đối thủ ở góc phải, và khung tối đa của bàn thu nhỏ của họ. */
+const OPP_W = 320;
+const MINI_W = 120;
+const MINI_H = 46;
 const MARGIN = 12;
 /**
  * Bề rộng vòng ô trống quanh bàn (nơi đường nối đi vòng ra ngoài), tính theo cạnh ô.
@@ -64,14 +72,60 @@ const LOSE_TEXT: Record<LoseReason, { title: string; reason?: string }> = {
 /**
  * Dữ liệu vào màn (xem SavedGame): điểm, lượt mang sang, lượt chơi lại, và màn chơi dở khi chơi tiếp từ bản lưu.
  * Trường bỏ trống là của lượt chơi mới: 0 điểm, không lượt mang sang, RETRIES_PER_RUN lượt chơi lại.
+ * Có `pvp` là đấu online: chơi trận hiện tại của phiên (pvp.match), các trường khác bị bỏ qua.
  */
-export type SceneData = Partial<SavedGame>;
+export type SceneData = Partial<SavedGame> & { pvp?: PvpSession };
+
+/** Đấu online: thông báo khi mình đánh đối thủ (sau "Chuỗi N!") và khi bị đối thủ đánh. */
+const ATTACK_SENT: Record<AttackKind, (opp: string) => string> = {
+  stone: (opp) => `Thả đá lên bàn ${opp}`,
+  tilt: (opp) => `Nghiêng bàn của ${opp}`,
+  fog: (opp) => `Che mắt ${opp}`,
+  shuffle: (opp) => `Đảo bàn của ${opp}`,
+};
+const ATTACK_TAKEN: Record<AttackKind, (opp: string) => string> = {
+  stone: (opp) => `${opp} thả đá lên bàn bạn!`,
+  tilt: (opp) => `${opp} nghiêng bàn của bạn!`,
+  fog: (opp) => `${opp} che mắt bạn!`,
+  shuffle: (opp) => `${opp} đảo bàn của bạn!`,
+};
+
+/** Câu giải thích kết quả trận đấu online. */
+function outcomeText(o: Outcome, opp: string): string {
+  switch (o.why) {
+    case 'clear':
+      return o.result === 'win' ? 'Bạn dọn sạch bàn trước!' : o.result === 'lose' ? `${opp} dọn sạch bàn trước.` : 'Hai bên dọn sạch bàn cùng lúc.';
+    case 'time':
+      return o.result === 'win'
+        ? 'Hết giờ, bạn còn ít cặp hơn.'
+        : o.result === 'lose'
+          ? `Hết giờ, ${opp} còn ít cặp hơn.`
+          : 'Hết giờ, hai bên còn bằng số cặp.';
+    case 'surrender':
+      return o.result === 'win' ? `${opp} đã đầu hàng.` : 'Bạn đã đầu hàng.';
+    case 'left':
+      return `${opp} đã rời trận hoặc mất kết nối.`;
+    case 'cheat':
+      // Thường là do hai máy khác phiên bản game (bàn không còn khớp nhau)
+      return o.result === 'win'
+        ? `Máy của ${opp} gửi nước đi không hợp lệ.`
+        : `Máy của ${opp} báo nước đi của bạn không hợp lệ. Hãy cập nhật game.`;
+  }
+}
 
 interface Rect {
   x: number;
   y: number;
   w: number;
   h: number;
+}
+
+interface OpponentHud {
+  gfx: Phaser.GameObjects.Graphics;
+  pairs: Phaser.GameObjects.Text;
+  x: number;
+  y: number;
+  cell: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -116,9 +170,27 @@ export class GameScene extends Phaser.Scene {
   /** Số cặp đã ăn trong màn; quyết định hướng dồn của kiểu Xoay vòng. */
   private matches = 0;
 
+  /**
+   * Đấu online: phiên và trận đang chơi; null khi chơi một mình. Bàn của trận (match.me.board) chính là this.board,
+   * nhưng mọi thay đổi trên bàn đi qua match (play / shuffle) để được gửi cho đối thủ.
+   */
+  private pvp: PvpSession | null = null;
+  private match: Match | null = null;
+  /** Đấu online: đã hết đếm ngược và hiện các ô. */
+  private started = false;
+
   /** Mọi đối tượng của HUD, để dựng lại khi kích thước màn hình đổi. */
   private hud: { destroy(): void }[] = [];
-  private scoreText!: Phaser.GameObjects.Text;
+  /** Số màn, hoặc số cặp còn lại khi đấu online. */
+  private stageText!: Phaser.GameObjects.Text;
+  private scoreText: Phaser.GameObjects.Text | null = null;
+  /** Đấu online: bàn thu nhỏ (góc trên bên trái ở x, y; cạnh ô `cell`) và số cặp còn lại của đối thủ. */
+  private opp: OpponentHud | null = null;
+  /** Đấu online: số đếm ngược giữa màn hình lúc bắt đầu trận. */
+  private countdownText: Phaser.GameObjects.Text | null = null;
+  /** Đấu online: bị che mắt tới lúc này (Date.now()), và lớp che phủ kín bàn chơi đang hiện. */
+  private fogUntil = 0;
+  private fogCover: { destroy(): void }[] = [];
   private gravityArrow: Phaser.GameObjects.Text | null = null;
   private timeBar!: Phaser.GameObjects.Graphics;
   private timeBarRect!: Rect;
@@ -140,12 +212,17 @@ export class GameScene extends Phaser.Scene {
       retries: data.retries ?? RETRIES_PER_RUN,
     };
     this.resumePlay = data.play ?? null;
+    this.match = data.pvp?.match ?? null;
+    this.pvp = this.match ? data.pvp! : null;
+    this.started = false;
+    this.fogUntil = 0;
+    this.fogCover = [];
     this.levelIndex = this.entry.level;
     this.score = this.entry.score;
-    this.cfg = getLevel(this.levelIndex);
+    this.cfg = this.match ? this.match.cfg : getLevel(this.levelIndex);
     this.timeLeft = this.cfg.time;
-    this.hints = this.entry.hints + HINTS_PER_LEVEL;
-    this.shuffles = this.entry.shuffles + SHUFFLES_PER_LEVEL;
+    this.hints = this.match ? PVP_HINTS : this.entry.hints + HINTS_PER_LEVEL;
+    this.shuffles = this.match ? PVP_SHUFFLES : this.entry.shuffles + SHUFFLES_PER_LEVEL;
     this.retries = this.entry.retries;
     this.lost = null;
     this.selected = null;
@@ -163,14 +240,21 @@ export class GameScene extends Phaser.Scene {
     createTileTextures(this);
     this.cameras.main.setBackgroundColor(C.bg);
 
-    this.board = new Board(this.cfg.rows, this.cfg.cols);
-    // Chơi tiếp màn đang lưu dở. Bàn đã lưu không khớp màn (bản cập nhật game đổi các màn) thì chơi màn này từ đầu
-    const play = this.resumePlay && this.board.load(this.resumePlay.grid, MAX_TYPES) ? this.resumePlay : null;
-    if (play) this.restore(play);
-    else this.board.generate(this.cfg.types, this.cfg.stones ?? 0);
+    let play: SavedPlay | null = null;
+    if (this.match) {
+      this.board = this.match.me.board;
+    } else {
+      this.board = new Board(this.cfg.rows, this.cfg.cols);
+      // Chơi tiếp màn đang lưu dở. Bàn đã lưu không khớp màn (bản cập nhật game đổi các màn) thì chơi màn này từ đầu
+      play = this.resumePlay && this.board.load(this.resumePlay.grid, MAX_TYPES) ? this.resumePlay : null;
+      if (play) this.restore(play);
+      else this.board.generate(this.cfg.types, this.cfg.stones ?? 0);
+    }
 
     this.layoutBoard();
-    this.createTiles();
+    // Đấu online: các ô chỉ hiện khi hết đếm ngược (xem tickPvp), để không ai xem trước bàn
+    this.sprites = Array.from({ length: this.board.rows + 2 }, () => new Array(this.board.cols + 2).fill(null));
+    if (!this.match) this.createTiles();
     this.createHud();
 
     this.selectFrame = this.add.graphics().setDepth(5);
@@ -179,6 +263,11 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointer(p));
     this.time.addEvent({ delay: 100, loop: true, callback: () => this.tick(0.1) });
+    onGameResize(this, () => this.relayout());
+    if (this.match) {
+      this.startPvp(this.pvp!, this.match);
+      return;
+    }
     // Thắng / thua đã lưu lúc kết thúc màn, không lưu đè
     this.time.addEvent({
       delay: AUTOSAVE_MS,
@@ -187,7 +276,6 @@ export class GameScene extends Phaser.Scene {
         if (!this.ended) this.saveProgress();
       },
     });
-    onGameResize(this, () => this.relayout());
     // Nút Back của Android: làm việc của hộp thoại đang mở, không có hộp thoại thì tạm dừng
     onBack(this, () => (this.dialog ? this.dialog.opts.back?.() : this.pause()));
     // App bị đưa xuống nền: tạm dừng (và lưu), để khi quay lại đồng hồ không chạy tiếp ngay,
@@ -218,6 +306,8 @@ export class GameScene extends Phaser.Scene {
    * Gọi khi vào màn, mỗi AUTOSAVE_MS, khi tạm dừng (cả khi app xuống nền), khi thua và khi về menu.
    */
   private saveProgress(): void {
+    // Trận đấu online không lưu, và không được đè lên lượt chơi một mình đang lưu
+    if (this.match) return;
     saveGame({
       ...this.entry,
       play: {
@@ -276,6 +366,7 @@ export class GameScene extends Phaser.Scene {
     this.pathGfx.clear();
     this.select(this.selected);
     this.setHint(this.hintMove);
+    this.drawFog();
 
     this.tweens.killTweensOf(this.toastText);
     this.hud.forEach((o) => o.destroy());
@@ -334,8 +425,10 @@ export class GameScene extends Phaser.Scene {
 
     // Xếp từ trái sang phải theo bề rộng thật của chữ; thanh thời gian lấp phần còn lại
     let x = 32;
-    const stage = keep(this.add.text(x, cy, `Màn ${this.levelIndex + 1}`, textStyle(28, C.text, 'bold')));
+    const label = this.match ? this.pairsText(this.match.me.pairsLeft()) : `Màn ${this.levelIndex + 1}`;
+    const stage = keep(this.add.text(x, cy, label, textStyle(28, C.text, 'bold')));
     stage.setOrigin(0, 0.5);
+    this.stageText = stage;
     x += stage.width + 16;
     const gravity = keep(this.add.text(x, cy, GRAVITY_LABEL[this.cfg.gravity], textStyle(20, C.textDim)));
     gravity.setOrigin(0, 0.5);
@@ -352,13 +445,26 @@ export class GameScene extends Phaser.Scene {
     x += HUD_BTN + 16;
     this.shuffleBtn = keep(new IconButton(this, x + HUD_BTN / 2, cy, HUD_BTN, 'shuffle', () => this.useShuffle()));
     x += HUD_BTN + 16;
+    // Đấu online không tạm dừng được: nút này mở hộp hỏi đầu hàng
     keep(new Button(this, x + HUD_BTN / 2, cy, HUD_BTN, HUD_BTN, 'II', () => this.pause(), 1, 22));
     x += HUD_BTN + 20;
 
-    this.scoreText = keep(this.add.text(W - 32, cy, '', textStyle(28, C.text, 'bold')).setOrigin(1, 0.5));
+    this.scoreText = null;
+    this.opp = null;
+    if (this.match) this.createOpponentHud(keep, W - 32, cy);
+    else this.scoreText = keep(this.add.text(W - 32, cy, '', textStyle(28, C.text, 'bold')).setOrigin(1, 0.5));
     this.timeBar = keep(this.add.graphics());
-    const barRight = W - 32 - SCORE_W - 20;
+    const barRight = W - 32 - (this.match ? OPP_W : SCORE_W) - 20;
     this.timeBarRect = { x, y: cy - 7, w: Math.max(60, barRight - x), h: 14 };
+
+    // Đấu online: số đếm ngược giữa bàn chơi, tới khi trận bắt đầu
+    this.countdownText = null;
+    if (this.match && !this.started) {
+      this.countdownText = keep(
+        this.add.text(W / 2, HUD_H + (this.scale.height - HUD_H) / 2, '', textStyle(160, C.textAccent, 'bold')).setOrigin(0.5),
+      );
+      this.updateCountdown();
+    }
 
     this.toastText = keep(
       this.add
@@ -374,9 +480,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshHud(): void {
-    this.scoreText.setText(`${this.score} điểm`);
-    // Điểm rất lớn thì thu nhỏ chữ cho vừa chỗ dành sẵn
-    this.scoreText.setScale(Math.min(1, SCORE_W / this.scoreText.width));
+    if (this.scoreText) {
+      this.scoreText.setText(`${this.score} điểm`);
+      // Điểm rất lớn thì thu nhỏ chữ cho vừa chỗ dành sẵn
+      this.scoreText.setScale(Math.min(1, SCORE_W / this.scoreText.width));
+    }
+    if (this.match) {
+      this.stageText.setText(this.pairsText(this.match.me.pairsLeft()));
+      this.drawOpponent();
+    }
     // Xoay vòng: mũi tên chỉ hướng dồn ở lần ăn cặp tới
     this.gravityArrow?.setText(ARROW[gravityFor(this.cfg.gravity, this.matches)] ?? '');
     this.hintBtn.setCount(this.hints, this.hints > 0);
@@ -416,8 +528,13 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------- Tương tác ----------------
 
+  /** Không thao tác được trên bàn: màn đã kết thúc, hoặc (đấu online) chưa bắt đầu, đã dọn xong hay hết giờ. */
+  private locked(): boolean {
+    return this.ended || (this.match !== null && !this.match.canPlay());
+  }
+
   private onPointer(p: Phaser.Input.Pointer): void {
-    if (this.ended || this.paused) return;
+    if (this.locked() || this.paused) return;
     // Chạm vào vòng ô trống cho ra hàng/cột 0 hoặc rows+1/cols+1, bị isInside loại ra
     const c = Math.floor((p.worldX - this.originX - this.ringX) / this.cellW) + 1;
     const r = Math.floor((p.worldY - this.originY - this.ringY) / this.cellH) + 1;
@@ -456,6 +573,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private matchPair(a: Point, b: Point, path: Point[]): void {
+    // Cập nhật logic + dồn ô. Đấu online: qua Match, để nước đi được gửi cho đối thủ (kèm đòn nếu thành chuỗi)
+    let moves: Move[];
+    if (this.match) {
+      const played = this.match.play(a, b);
+      if (!played) return;
+      moves = played.moves;
+      this.showCombo(played.combo, played.attack);
+    } else {
+      moves = this.board.remove(a, b, gravityFor(this.cfg.gravity, this.matches));
+    }
+    this.matches++;
+
     this.select(null);
     this.setHint(null);
     this.drawPath(path);
@@ -477,8 +606,23 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Cập nhật logic + dồn ô
-    const moves = this.board.remove(a, b, gravityFor(this.cfg.gravity, this.matches++));
+    this.moveSprites(moves);
+
+    // Đấu online không có điểm, và không cộng giờ: hai bên hết giờ cùng lúc
+    if (!this.match) {
+      this.score += SCORE_PER_PAIR;
+      this.timeLeft = Math.min(this.cfg.time, this.timeLeft + TIME_BONUS_PER_PAIR);
+    }
+    this.refreshHud();
+    this.checkBoard();
+  }
+
+  /**
+   * Dời các ô bị dồn (sau khi ăn cặp, hay bị đối thủ nghiêng bàn) tới chỗ mới, theo danh sách của Board.
+   * Mọi lần dời đều chờ cùng một khoảng và chạy cùng thời gian, nên lần dời sau luôn kết thúc sau lần trước:
+   * ô bị dời hai lần liền vẫn dừng đúng chỗ cuối.
+   */
+  private moveSprites(moves: Move[]): void {
     const moving = moves.map((m) => this.sprites[m.from.r][m.from.c]);
     moves.forEach((m) => (this.sprites[m.from.r][m.from.c] = null));
     moves.forEach((m, i) => {
@@ -488,17 +632,16 @@ export class GameScene extends Phaser.Scene {
       const { x, y } = this.cellCenter(m.to);
       this.tweens.add({ targets: img, x, y, duration: 180, delay: 200, ease: 'Quad.Out' });
     });
-
-    this.score += SCORE_PER_PAIR;
-    this.timeLeft = Math.min(this.cfg.time, this.timeLeft + TIME_BONUS_PER_PAIR);
-    this.refreshHud();
-    this.checkBoard();
   }
 
-  /** Sau khi bàn đổi: dọn sạch thì qua màn, bế tắc thì tự đảo bàn (chờ hiệu ứng ăn cặp chạy xong). */
+  /**
+   * Sau khi bàn đổi: dọn sạch thì qua màn, bế tắc thì tự đảo bàn (chờ hiệu ứng ăn cặp chạy xong).
+   * Đấu online thì dọn sạch là xong phần mình: Match phân xử và báo kết quả (xem showResult).
+   */
   private checkBoard(): void {
     if (this.board.isCleared()) {
-      this.time.delayedCall(450, () => this.winLevel());
+      if (this.match) this.waitForResult();
+      else this.time.delayedCall(450, () => this.winLevel());
     } else if (!this.board.hasMove()) {
       this.time.delayedCall(450, () => this.autoShuffle());
     }
@@ -520,7 +663,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private useHint(): void {
-    if (this.ended || this.hints <= 0) return;
+    if (this.locked() || this.hints <= 0) return;
     const move = this.board.findAnyMove();
     if (!move) return;
     this.hints--;
@@ -533,15 +676,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private useShuffle(): void {
-    if (this.ended || this.shuffles <= 0) return;
+    if (this.locked() || this.shuffles <= 0) return;
     this.shuffleBoard(false);
   }
 
-  /** Bàn hết nước đi: tự dùng một lượt Đảo bàn của người chơi; hết lượt thì thua màn. */
+  /**
+   * Bàn hết nước đi: tự dùng một lượt Đảo bàn của người chơi; hết lượt thì thua màn.
+   * Đấu online thì tự đảo không tốn lượt (xem pvp/match.ts), nên không ai thua vì bế tắc.
+   */
   private autoShuffle(): void {
     // Người chơi có thể đã tự bấm Đảo bàn trong lúc chờ
-    if (this.ended || this.board.hasMove()) return;
-    if (this.shuffles <= 0) {
+    if (this.locked() || this.board.hasMove()) return;
+    if (this.shuffles <= 0 && !this.match) {
       this.loseLevel('moves');
       return;
     }
@@ -549,13 +695,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private shuffleBoard(auto: boolean): void {
-    this.shuffles--;
+    // Đấu online: qua Match, để lần đảo được gửi cho đối thủ
+    const broken = this.match ? this.match.shuffle(auto) : this.board.shuffle();
+    if (!broken) return;
+    if (!auto || !this.match) this.shuffles--;
     this.select(null);
     this.setHint(null);
-    const broken = this.board.shuffle();
     this.syncTextures();
     this.breakStones(broken);
-    if (auto) this.toast(broken.length ? 'Hết nước đi – đá vỡ để mở đường' : 'Hết nước đi – tự dùng 1 lượt Đảo bàn');
+    if (auto && this.match) this.toast('Hết nước đi – tự đảo bàn');
+    else if (auto) this.toast(broken.length ? 'Hết nước đi – đá vỡ để mở đường' : 'Hết nước đi – tự dùng 1 lượt Đảo bàn');
     else if (broken.length) this.toast('Đá vỡ để mở đường');
     this.refreshHud();
   }
@@ -601,6 +750,10 @@ export class GameScene extends Phaser.Scene {
   // ---------------- Thời gian & kết thúc ----------------
 
   private tick(dt: number): void {
+    if (this.match) {
+      this.tickPvp(this.match);
+      return;
+    }
     if (this.ended) return;
     this.timeLeft -= dt;
     this.drawTimeBar();
@@ -701,6 +854,221 @@ export class GameScene extends Phaser.Scene {
     this.dialog = null;
   }
 
+  // ---------------- Đấu online ----------------
+
+  /**
+   * Vào trận đấu online: nghe Match (bàn đối thủ đổi, kết quả) và phiên (trận mới khi đấu lại, đối thủ rời đi).
+   * Không có tạm dừng hay lưu: Back mở hộp hỏi đầu hàng, app xuống nền thì trận vẫn chạy
+   * (đồng hồ tính theo giờ bắt đầu, nên quay lại vẫn đúng giờ; đi lâu quá thì đối thủ được xử thắng).
+   */
+  private startPvp(session: PvpSession, match: Match): void {
+    match.onOpponent = () => this.drawOpponent();
+    match.onHit = (effect) => this.showHit(effect);
+    match.onEnd = () => this.showResult();
+    const listener = {
+      onStart: () => this.scene.restart({ pvp: session }),
+      onRematch: () => this.showResult(),
+      onClosed: () => this.showResult(),
+      onLink: (ok: boolean) => this.toast(ok ? 'Đã kết nối lại' : 'Mất kết nối, đang thử lại…'),
+    };
+    session.listener = listener;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (session.listener === listener) session.listener = null;
+      match.onOpponent = null;
+      match.onHit = null;
+      match.onEnd = null;
+    });
+    onBack(this, () => (this.dialog ? this.dialog.opts.back?.() : this.confirmSurrender()));
+    if (session.relayed) this.toast('Kết nối qua máy chủ chuyển tiếp');
+    // Trận có thể đã kết thúc trong lúc chuyển màn hình (đối thủ đầu hàng ngay, rời đi...)
+    if (match.outcome || session.closed) this.showResult();
+  }
+
+  private tickPvp(m: Match): void {
+    m.tick();
+    if (!this.started) {
+      if (m.elapsed() < 0) {
+        this.updateCountdown();
+        return;
+      }
+      this.started = true;
+      this.countdownText?.destroy();
+      this.countdownText = null;
+      this.createTiles();
+      this.toast('Bắt đầu!');
+    }
+    this.timeLeft = m.timeLeft();
+    this.drawTimeBar();
+    if (this.fogCover.length && Date.now() >= this.fogUntil) this.drawFog();
+    if (m.timeLeft() <= 0) this.waitForResult();
+  }
+
+  /** Mình vừa ăn cặp: báo độ dài chuỗi, và đòn vừa gửi cho đối thủ nếu chuỗi đủ dài. */
+  private showCombo(combo: number, attack: AttackKind | null): void {
+    if (combo < 2) return;
+    this.toast(attack ? `Chuỗi ${combo}! ${ATTACK_SENT[attack](this.pvp?.oppName ?? 'đối thủ')}` : `Chuỗi ${combo}!`);
+  }
+
+  /** Bàn mình vừa nhận một đòn của đối thủ (bàn đã đổi xong): vẽ lại đúng thay đổi đó. */
+  private showHit(e: HitEffect): void {
+    // Bàn kín chỗ (chưa ăn được cặp nào, hay đá đã kề khắp nơi): đá không rơi được, không có gì đổi
+    if (e.kind === 'stone' && !e.at) return;
+    this.select(null);
+    this.setHint(null);
+    switch (e.kind) {
+      case 'stone':
+        this.dropStoneSprite(e.at!);
+        break;
+      case 'tilt':
+        this.moveSprites(e.moves);
+        break;
+      case 'fog':
+        this.fogUntil = Math.max(this.fogUntil, Date.now() + FOG_MS);
+        this.drawFog();
+        break;
+      case 'shuffle':
+        this.syncTextures();
+        this.breakStones(e.broken);
+        break;
+    }
+    this.toast(ATTACK_TAKEN[e.kind](this.pvp?.oppName ?? 'Đối thủ'));
+    this.refreshHud();
+    // Đá hay nghiêng bàn có thể làm bàn bế tắc: tự đảo như sau một lần ăn cặp
+    this.checkBoard();
+  }
+
+  /** Viên đá đối thủ thả xuống: rơi từ trên cao vào ô trống. */
+  private dropStoneSprite(p: Point): void {
+    const { x, y } = this.cellCenter(p);
+    const img = this.add.image(x, y, textureFor(STONE, this.texH)).setScale(this.tileScale() * 1.8).setAlpha(0);
+    this.tweens.add({ targets: img, scale: this.tileScale(), alpha: 1, duration: 350, ease: 'Bounce.Out' });
+    this.sprites[p.r][p.c] = img;
+  }
+
+  /**
+   * Lớp che kín bàn chơi khi bị che mắt (tới fogUntil): vẽ lại khi bố cục đổi, gỡ khi hết giờ che.
+   * Vẫn chạm được vào bàn bên dưới; khung chọn và gợi ý nằm trên lớp che.
+   */
+  private drawFog(): void {
+    this.fogCover.forEach((o) => o.destroy());
+    this.fogCover = [];
+    if (Date.now() >= this.fogUntil) return;
+    const w = this.cellW * this.board.cols + this.ringX * 2;
+    const h = this.cellH * this.board.rows + this.ringY * 2;
+    const cover = this.add.graphics().setDepth(4);
+    cover.fillStyle(C.panel, 0.97).fillRoundedRect(this.originX, this.originY, w, h, 24);
+    const label = this.add
+      .text(this.originX + w / 2, this.originY + h / 2, 'Bị che mắt!', textStyle(56, C.textDim, 'bold'))
+      .setOrigin(0.5)
+      .setDepth(4);
+    this.fogCover = [cover, label];
+  }
+
+  private updateCountdown(): void {
+    if (this.match && this.countdownText) this.countdownText.setText(String(Math.max(1, Math.ceil(-this.match.elapsed() / 1000))));
+  }
+
+  /** Mình đã dọn xong hoặc hết giờ: thôi thao tác, chờ Match báo kết quả (thường chỉ khoảng một giây). */
+  private waitForResult(): void {
+    if (this.ended) return;
+    this.ended = true;
+    this.select(null);
+    this.setHint(null);
+    if (!this.match?.outcome) this.toast(this.board.isCleared() ? 'Dọn xong! Chờ kết quả…' : 'Hết giờ! Chờ kết quả…');
+  }
+
+  private pairsText(pairs: number): string {
+    return `Còn ${pairs} cặp`;
+  }
+
+  /** Góc phải HUD: tên và số cặp còn lại của đối thủ (căn phải, sát `right`), rồi bàn thu nhỏ của họ. */
+  private createOpponentHud(keep: <T extends { destroy(): void }>(o: T) => T, right: number, cy: number): void {
+    const { rows, cols } = this.board;
+    const cell = Math.max(2, Math.floor(Math.min(MINI_W / cols, MINI_H / rows)));
+    const x = right - cols * cell;
+    const y = Math.round(cy - (rows * cell) / 2);
+    const textRight = x - 16;
+    const name = keep(this.add.text(textRight, cy - 12, this.pvp?.oppName ?? '', textStyle(20, C.text, 'bold')));
+    name.setOrigin(1, 0.5).setScale(Math.min(1, (OPP_W - (right - x) - 16) / name.width));
+    const pairs = keep(this.add.text(textRight, cy + 13, '', textStyle(18, C.textDim)).setOrigin(1, 0.5));
+    this.opp = { gfx: keep(this.add.graphics()), pairs, x, y, cell };
+  }
+
+  /** Vẽ lại bàn thu nhỏ của đối thủ từ bản sao bàn của họ: ô hình màu nhấn, đá màu xám. */
+  private drawOpponent(): void {
+    if (!this.match || !this.opp) return;
+    const { board } = this.match.opp;
+    const { gfx, pairs, x, y, cell } = this.opp;
+    gfx.clear();
+    gfx.fillStyle(0x163040, 1).fillRoundedRect(x - 4, y - 4, board.cols * cell + 8, board.rows * cell + 8, 6);
+    for (let r = 1; r <= board.rows; r++)
+      for (let c = 1; c <= board.cols; c++) {
+        const v = board.grid[r][c];
+        if (v === 0) continue;
+        gfx.fillStyle(v > 0 ? C.accent : C.disabled, 1);
+        gfx.fillRect(x + (c - 1) * cell, y + (r - 1) * cell, cell - 1, cell - 1);
+      }
+    pairs.setText(this.pairsText(this.match.opp.pairsLeft()).toLowerCase());
+  }
+
+  /** Hộp hỏi đầu hàng (nút II, nút Back). Trận vẫn chạy trong lúc hộp mở. */
+  private confirmSurrender(): void {
+    if (!this.match || this.match.outcome || this.dialog) return;
+    this.openDialog({
+      title: 'Đầu hàng?',
+      body: 'Trận đấu không tạm dừng được: đồng hồ vẫn chạy trong lúc hộp thoại này mở.',
+      actions: [
+        { label: 'Chơi tiếp', onClick: () => this.closeDialog() },
+        { label: 'Đầu hàng', onClick: () => this.match?.surrender() },
+      ],
+      back: () => this.closeDialog(),
+    });
+  }
+
+  /**
+   * Hộp kết quả trận, mở lại mỗi khi có gì đổi (đối thủ muốn đấu lại, đối thủ rời phòng).
+   * Đấu lại khi cả hai cùng bấm; về menu là rời phòng.
+   */
+  private showResult(): void {
+    const m = this.match;
+    const s = this.pvp;
+    if (!m?.outcome || !s) return;
+    this.ended = true;
+    this.select(null);
+    this.setHint(null);
+    // Trận đã xong: bỏ lớp che mắt (nếu đang bị che) để xem lại bàn sau hộp kết quả
+    this.fogUntil = 0;
+    this.drawFog();
+    const o = m.outcome;
+    const opp = s.oppName;
+    const lines = [outcomeText(o, opp), `Bạn còn ${m.me.pairsLeft()} cặp, ${opp} còn ${m.opp.pairsLeft()} cặp.`];
+    if (s.closed) {
+      if (o.why !== 'left') lines.push(`${opp} đã rời phòng.`);
+    } else if (s.rematch.me) lines.push(`Đang chờ ${opp} đồng ý đấu lại…`);
+    else if (s.rematch.opp) lines.push(`${opp} muốn đấu lại!`);
+    const rematch = {
+      label: 'Đấu lại',
+      onClick: () => {
+        s.requestRematch();
+        this.showResult();
+      },
+    };
+    this.openDialog({
+      title: o.result === 'win' ? 'Bạn thắng!' : o.result === 'lose' ? 'Bạn thua' : 'Hòa!',
+      body: lines.join('\n'),
+      actions: [...(s.closed || s.rematch.me ? [] : [rematch]), { label: 'Về menu', onClick: () => this.leavePvp() }],
+      back: () => this.leavePvp(),
+      // Kết quả có thể hiện giữa lúc đang chạm liên tục vào bàn (đối thủ vừa dọn xong)
+      ignoreTapsMs: 800,
+    });
+  }
+
+  /** Rời phòng đấu online và về menu. */
+  private leavePvp(): void {
+    this.pvp?.close();
+    this.scene.start('Menu');
+  }
+
   // ---------------- Tạm dừng ----------------
 
   /** Dừng đồng hồ đếm giờ, các hiệu ứng và thao tác trên bàn chơi. */
@@ -711,6 +1079,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private pause(): void {
+    if (this.match) {
+      this.confirmSurrender();
+      return;
+    }
     if (this.ended || this.paused) return;
     this.setPaused(true);
     // Tạm dừng cũng là lúc app xuống nền, có thể bị tắt hẳn ngay sau đó

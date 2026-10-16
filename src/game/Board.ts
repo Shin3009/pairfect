@@ -191,6 +191,24 @@ export class Board {
   }
 
   /**
+   * Thêm một viên đá vào một ô trống ngẫu nhiên trong bàn (đòn tấn công khi đấu online). Như lúc sinh bàn,
+   * đá mới không kề viên đá nào khác, kể cả chéo, nên không ô nào bị đá vây kín.
+   * Trả về vị trí viên đá, hoặc null nếu không còn ô trống nào đặt được.
+   */
+  dropStone(): Point | null {
+    const nearStone = (p: Point) => {
+      for (let r = p.r - 1; r <= p.r + 1; r++)
+        for (let c = p.c - 1; c <= p.c + 1; c++) if (this.grid[r][c] === STONE) return true;
+      return false;
+    };
+    const free = this.allInnerPositions().filter((p) => this.get(p) === 0 && !nearStone(p));
+    if (!free.length) return null;
+    const p = free[Math.floor(this.rng() * free.length)];
+    this.grid[p.r][p.c] = STONE;
+    return p;
+  }
+
+  /**
    * Dồn ô theo `gravity`. Kiểu hai hướng chạy lần lượt từng bước, nên một ô có thể đi hai chặng;
    * danh sách trả về đã gộp lại để mỗi ô chỉ có một nước đi từ vị trí cũ tới vị trí mới.
    */

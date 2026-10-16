@@ -1,3 +1,4 @@
+import type { FirebaseApp } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
 import type { DocumentData, Firestore } from 'firebase/firestore/lite';
 import {
@@ -35,16 +36,16 @@ function firebaseConfig(): FirebaseConfig | null {
   return apiKey && projectId ? { apiKey, projectId } : null;
 }
 
-let services: Promise<{ auth: Auth; db: Firestore }> | null = null;
+let services: Promise<{ app: FirebaseApp; auth: Auth; db: Firestore }> | null = null;
 
-function connect(config: FirebaseConfig): Promise<{ auth: Auth; db: Firestore }> {
+function connect(config: FirebaseConfig): Promise<{ app: FirebaseApp; auth: Auth; db: Firestore }> {
   services ??= Promise.all([import('firebase/app'), import('firebase/auth'), import('firebase/firestore/lite')]).then(
     ([{ initializeApp }, { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence }, { getFirestore }]) => {
       const app = initializeApp(config);
       // Không dùng getAuth(): nó nạp thêm phần đăng nhập qua cửa sổ bật lên / chuyển trang, đăng nhập ẩn danh không cần.
       // Phiên đăng nhập lưu trong IndexedDB nên lần sau mở app vẫn là người chơi cũ (cùng uid).
       const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
-      return { auth, db: getFirestore(app) };
+      return { app, auth, db: getFirestore(app) };
     },
     (e: unknown) => {
       services = null; // tải thư viện lỗi: lần sau thử tải lại
@@ -52,6 +53,21 @@ function connect(config: FirebaseConfig): Promise<{ auth: Auth; db: Firestore }>
     },
   );
   return services;
+}
+
+/**
+ * Firebase app kèm uid của người chơi: dùng phiên đăng nhập đã lưu, chưa có thì tạo người chơi ẩn danh mới.
+ * Dùng chung cho việc gửi kỷ lục và cho đấu online (xem pvp/signaling.ts).
+ */
+export async function firebaseApp(): Promise<{ app: FirebaseApp; uid: string }> {
+  const config = firebaseConfig();
+  if (!config) throw new Error('Chưa cấu hình Firebase');
+  const { app, auth } = await connect(config);
+  const { signInAnonymously } = await import('firebase/auth');
+  // Chờ đọc xong phiên đăng nhập đã lưu; chưa có thì tạo người chơi ẩn danh mới
+  await auth.authStateReady();
+  const user = auth.currentUser ?? (await signInAnonymously(auth)).user;
+  return { app, uid: user.uid };
 }
 
 /** Bản build có cấu hình Firebase hay không; không có thì không có bảng xếp hạng online. */
@@ -120,15 +136,10 @@ export async function syncBest(): Promise<void> {
 /** Ghi kỷ lục vào document của người chơi. Trả về false nếu lỗi. */
 async function upload(config: FirebaseConfig, best: OnlineBest): Promise<boolean> {
   try {
-    const { auth, db } = await connect(config);
-    const [{ signInAnonymously }, { doc, setDoc, serverTimestamp }] = await Promise.all([
-      import('firebase/auth'),
-      import('firebase/firestore/lite'),
-    ]);
-    // Chờ đọc xong phiên đăng nhập đã lưu; chưa có thì tạo người chơi ẩn danh mới
-    await auth.authStateReady();
-    const user = auth.currentUser ?? (await signInAnonymously(auth)).user;
-    await setDoc(doc(db, COLLECTION, user.uid), {
+    const { db } = await connect(config);
+    const { uid } = await firebaseApp();
+    const { doc, setDoc, serverTimestamp } = await import('firebase/firestore/lite');
+    await setDoc(doc(db, COLLECTION, uid), {
       name: best.name,
       score: best.score,
       stage: best.stage,

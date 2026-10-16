@@ -1,0 +1,40 @@
+{
+  // Quy tắc bảo mật của Firebase Realtime Database cho đấu online (xem src/pvp/signaling.ts).
+  // Dán vào Firebase Console > Realtime Database > Rules rồi bấm Publish.
+  // Ngoài pvpRooms không ai đọc / ghi được gì (mặc định là từ chối).
+  "rules": {
+    "pvpRooms": {
+      "$code": {
+        // Người chơi đã đăng nhập (ẩn danh) đọc được phòng, để vào phòng bằng mã
+        ".read": "auth != null",
+        // Chủ phòng: tạo phòng khi mã chưa có ai dùng, sửa và xóa phòng của mình
+        ".write": "auth != null && (data.exists() ? data.child('host').val() === auth.uid : newData.child('host').val() === auth.uid)",
+        // Mã phòng: 6 ký tự, không có I, O, 0, 1 (CODE_ALPHABET trong src/pvp/protocol.ts)
+        ".validate": "$code.matches(/^[A-HJ-NP-Z2-9]{6}$/) && newData.hasChildren(['host', 'hostName', 'protocol', 'createdAt'])",
+        "host": { ".validate": "newData.isString()" },
+        "hostName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
+        "protocol": { ".validate": "newData.isNumber()" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        // Khách: vào phòng chưa có khách (ghi uid của chính mình), hoặc tự rời phòng
+        "guest": {
+          ".write": "auth != null && (data.exists() ? !newData.exists() && data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+          ".validate": "newData.hasChildren(['uid', 'name'])",
+          "uid": { ".validate": "newData.isString()" },
+          "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
+          "$other": { ".validate": false }
+        },
+        // Mô tả kết nối WebRTC: lời mời của chủ phòng và câu trả lời của khách đang ở trong phòng
+        "offer": {
+          ".validate": "newData.hasChildren(['n', 'sdp']) && newData.child('n').isNumber() && newData.child('sdp').isString() && newData.child('sdp').val().length < 20000",
+          "$field": { ".validate": "$field === 'n' || $field === 'sdp'" }
+        },
+        "answer": {
+          ".write": "auth != null && data.parent().child('guest/uid').val() === auth.uid",
+          ".validate": "newData.hasChildren(['n', 'sdp']) && newData.child('n').isNumber() && newData.child('sdp').isString() && newData.child('sdp').val().length < 20000",
+          "$field": { ".validate": "$field === 'n' || $field === 'sdp'" }
+        },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

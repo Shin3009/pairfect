@@ -23,9 +23,11 @@ npx tsc                                      # type-check only
 
 There is no linter configured.
 
-In dev mode, `main.ts` exposes `window.game`. Use `game.scene.getScene('Game')` in DevTools to inspect the live board, score and timer.
+In dev mode, `main.ts` exposes `window.game`. Use `game.scene.getScene('Game')` in DevTools to inspect the live board, score and timer. It also exposes `pvpBot(stepMs?)`, which starts an online match against a local bot with no network or Firebase (`src/pvp/bot.ts`), and `?relay` in the page URL forces WebRTC through TURN.
 
 Firebase config is read at build time from `VITE_FIREBASE_API_KEY` and `VITE_FIREBASE_PROJECT_ID` in `.env.local` (gitignored; template in `.env.example`, typed in `src/vite-env.d.ts`). Without them the game runs normally and simply doesn't upload scores. The Firebase project also needs the Anonymous sign-in provider enabled. `firestore.rules` is the matching Firestore security-rules file; it's pasted into the Firebase Console, not deployed by any script.
+
+Online PvP additionally needs `VITE_FIREBASE_DATABASE_URL` (a Realtime Database, used as the lobby; `database.rules.json` is its rules file, also pasted by hand). Without it the menu has no "Đấu online" button. `VITE_METERED_DOMAIN` and `VITE_METERED_API_KEY` configure the Metered TURN server; without them WebRTC uses STUN only. The API key is a per-credential key that Metered intends for client code, not the account's Secret Key.
 
 ### Android
 
@@ -51,7 +53,8 @@ The code is split into a pure logic layer and a rendering layer:
 - **Stones** (`STONE = -1` in the grid) are fixed blockers. Any grid value `<= 0` is "not a tile": stones can't be selected or matched, block paths, are never shuffled or moved, and split compaction into segments so tiles stop against them. `remaining()` / `isCleared()` count tiles only.
   - `generate` never places two stones within one cell of each other, including diagonally, so no cell can be walled in.
   - If a stuck board can't be fixed by reshuffling, `shuffle()` breaks random stones until a move exists and returns their positions. `GameScene.breakStones` animates them away.
-- **Scenes** run in the order `Menu` → `Game` (plus `Menu` → `Leaderboard` and `Menu` → `TileArt`, each with a way back), and are registered in `main.ts`; the first in the list starts on launch. There is deliberately no stage select: every run starts at stage 1 (the old `LevelSelectScene` and its `pairfect-unlocked` progress were removed). Scenes switch with `this.scene.start(key, data)`. `Game` takes `SceneData` = `Partial<SavedGame>`: the stage entry `{ level, score, hints, shuffles, retries }`, plus `play` when resuming a saved stage. It moves to the next level with `this.scene.restart(...)`.
+  - `dropStone()` (the PvP stone attack) adds one stone to a random empty cell, keeping the same no-neighbour rule, or returns `null` when no cell qualifies.
+- **Scenes** run in the order `Menu` → `Game` (plus `Menu` → `Leaderboard`, `Menu` → `TileArt` and `Menu` → `PvpLobby` → `Game`, each with a way back), and are registered in `main.ts`; the first in the list starts on launch. There is deliberately no stage select: every run starts at stage 1 (the old `LevelSelectScene` and its `pairfect-unlocked` progress were removed). Scenes switch with `this.scene.start(key, data)`. `Game` takes `SceneData` = `Partial<SavedGame> & { pvp?: PvpSession }`: the stage entry `{ level, score, hints, shuffles, retries }`, plus `play` when resuming a saved stage, or `pvp` for an online match (see `src/pvp/` below). It moves to the next level with `this.scene.restart(...)`.
   - Hints and shuffles carry over like score: the next level gets the unused ones plus `HINTS_PER_LEVEL` / `SHUFFLES_PER_LEVEL`. The only way to start a fresh run is the menu ("Chơi" / "Chơi mới"), which omits them, so the player gets the base 3.
   - When a match leaves no move, `autoShuffle` spends one of the player's Shuffles. With none left, the level is lost ("Hết nước đi!"), the same way as running out of time.
   - A run has `RETRIES_PER_RUN` (3) retries in total, carried to the next level like hints. Both the lose dialog's "Chơi lại" and the pause menu's "Chơi lại màn" spend one through `retryLevel()`, which restarts the scene with the data it was entered with (`entry`). So the stage replays with the score, hints and shuffles the player had on entering it. Points earned in the failed attempt are dropped, which also keeps the score under the `firestore.rules` cap. Both dialogs show the count (`retriesText()`) and hide the retry button once none are left, so the lose dialog then only offers "Về menu".
@@ -65,10 +68,22 @@ The code is split into a pure logic layer and a rendering layer:
   - Points live in **`src/game/scoring.ts`** (`SCORE_PER_PAIR`, `POINTS_PER_SECOND_LEFT`), because `firestore.rules` caps a score at `stage * MAX_SCORE_PER_STAGE` (1700). `scoring.test.ts` checks that no level, including the loop and hard phase, can exceed `maxStageScore`, and that the rules use the same number. If a scoring or level change breaks that test, raise the cap in both `scoring.ts` and `firestore.rules`.
   - Pausing sets `this.time.paused` and `this.tweens.paused` and shows a dialog in the same scene. Phaser keeps both flags when a scene restarts, so `create()` clears them with `setPaused(false)`. Any new way into or out of the scene must not leave them set.
   - The game also pauses (and so saves) itself when the app goes to the background (see `native.ts` below).
+  - **PvP mode** (`this.match` set) reuses the same board code with these differences:
+    - `this.board` is `match.me.board`, and every change to it goes through `match.play` / `match.shuffle` so it is sent to the opponent. Never call `Board.remove` / `shuffle` directly in PvP.
+    - Incoming attacks change the board inside `Match`, and `match.onHit` → `showHit` redraws them. A stone drops a new stone sprite, a tilt goes through `moveSprites` (shared with `matchPair`), fog draws `drawFog` over the board until `fogUntil` (redrawn on relayout, removed when the result arrives), and a shuffle uses `syncTextures` / `breakStones`. `showHit` then runs `checkBoard`, since an attack can leave no move.
+    - Every `moveSprites` tween uses the same delay and duration, so a sprite moved twice in a row ends at the last target.
+    - `showCombo` toasts "Chuỗi N!" and the attack that was sent.
+    - Tiles appear only when the synced countdown ends (`tickPvp`). The timer is derived from the match clock, with no time bonus.
+    - There is no score, saving, pause or retry. `saveProgress` returns early, so a match never touches the saved solo run.
+    - The II button and Back ask "Đầu hàng?", and the clock keeps running while that dialog is open. Going to the background doesn't pause either.
+    - Auto-shuffle on a dead end is free. The HUD swaps the stage and score for pairs left and the opponent's name, pair count and mini-board (drawn from the shadow board).
+    - `locked()` replaces `ended` as the input guard.
+    - `showResult` (re)opens the result dialog with "Đấu lại" / "Về menu". It uses `ignoreTapsMs` because the result can arrive mid-tap.
+    - A rematch restarts the scene with the same session.
 - **`src/native.ts`** bridges the Android app (Capacitor `@capacitor/app`, plus `@capacitor/preferences` for the saved-run backup described above) to Phaser. `bindAppEvents` (called once in `main.ts`) re-emits the Back button and "app went to the background" as events on `game.events`; the background one also fires on Phaser's `HIDDEN` (page hidden), so it works in a browser tab too. Scenes subscribe with `onBack` / `onSuspend`, which unsubscribe on scene shutdown.
   - Registering a `backButton` listener disables Capacitor's default Back (leaving the app), so every scene must handle Back itself.
-  - Back is routed per scene: with a dialog open it calls that dialog's `DialogOptions.back` (no `back` means Back does nothing, used for the win dialog so a stray press doesn't leave the stage). With no dialog, `Game` pauses, `Leaderboard` and `TileArt` return to `Menu`, and `Menu` asks "Thoát game?" before `exitApp()`. `Game` and `Menu` track the open dialog as `{ opts, close }` for this. `Menu` asks `nameDialogBack()` first, so Back cancels a rename and does nothing on the required first-run name prompt.
-- **`src/scenes/nameDialog.ts`** is the player-name prompt. It is plain HTML (`#name-dialog` in `index.html`), not Phaser, so the system keyboard can type Vietnamese. `askPlayerName(current)` is a singleton that resolves to the saved, cleaned name, or to `null` on cancel. With `current = null` it is the required first-run prompt, which `MenuScene.create` opens when `loadPlayerName()` is null; with a name it is a cancellable rename, opened from the name chip in the menu's top-left corner. After either, the menu calls `syncBest()` so the online row picks up the name.
+  - Back is routed per scene: with a dialog open it calls that dialog's `DialogOptions.back` (no `back` means Back does nothing, used for the win dialog so a stray press doesn't leave the stage). With no dialog, `Game` pauses (asks to surrender in PvP), `Leaderboard` and `TileArt` return to `Menu`, `PvpLobby` cancels the current step (or returns to `Menu` from its first screen), and `Menu` asks "Thoát game?" before `exitApp()`. `Game` and `Menu` track the open dialog as `{ opts, close }` for this. `Menu` asks `nameDialogBack()` first, so Back cancels a rename and does nothing on the required first-run name prompt.
+- **`src/scenes/nameDialog.ts`** is the player-name prompt. It is plain HTML (`#name-dialog` in `index.html`), not Phaser, so the system keyboard can type Vietnamese. `askPlayerName(current)` is a singleton that resolves to the saved, cleaned name, or to `null` on cancel. With `current = null` it is the required first-run prompt, which `MenuScene.create` opens when `loadPlayerName()` is null; with a name it is a cancellable rename, opened from the name chip in the menu's top-left corner. After either, the menu calls `syncBest()` so the online row picks up the name. `askRoomCode()` reuses the same form for the PvP room code (uppercase, validated by `cleanCode`); a prompt of the other kind already open makes the call resolve to `null`.
   - It lives outside the scenes on purpose: the soft keyboard can resize the game, which restarts the menu, and the dialog must survive that.
   - Phaser hit-tests window-level touches even when they land outside the canvas, so the dialog stops propagation of touch, mouse and key events; otherwise a tap on it would also press the menu button underneath.
   - Its CSS sizes everything in `--u` (one logical game pixel, `min(100vh / 720, 100vw / 1100)`) so it matches `showDialog`. It sits in the top half of the screen because a landscape soft keyboard covers the bottom.
@@ -79,6 +94,31 @@ The code is split into a pure logic layer and a rendering layer:
   - Every actual upload attempt is reported to `onSyncResult` listeners as a `SyncResult`: `{ ok: false, best }`, or `{ ok: true, best, previous }`, where `previous` is the marker before this upload. A call that has nothing new to send reports nothing.
     - `main.ts` turns each result into a toast: "Đã gửi kỷ lục N điểm…", "Đã đổi tên…" (when only the name changed), or an error.
     - `online.ts` itself stays DOM-free so it can be tested in Node.
+- **`src/pvp/`** is online PvP: a 1v1 race on the same board, where the first to clear wins and at time-up (`PVP_TIME`, 240 s) fewer pairs left wins. Players meet through a room code, connect over WebRTC, and relay through TURN when a direct path fails.
+  - **Same board, no board on the wire.** Both sides build `Board`s with `seededRng(seed)` (`src/game/rng.ts`, mulberry32). Each device keeps its own board plus a shadow of the opponent's (`Match.me` / `Match.opp`, both `Side`s) and sends only numbered events (`match a b`, `shuffle auto|manual`). The receiver replays each event on the shadow through the same `Side` code.
+    - An event that fails to replay (no path, wrong sequence number, auto-shuffle while a move exists, too many manual shuffles) ends the match as `cheat`.
+    - This only works if every random choice on a board goes through the board's `rng`, and both devices run identical `Board` / `levels` / match rules. Bump `PROTOCOL` (`protocol.ts`) on any such change; rooms and `hello` reject a mismatch.
+  - **Combo attacks** (`attacks.ts`) are derived from the event stream, never sent as separate messages.
+    - `Side.match(a, b, t)` tracks the chain: a match within `COMBO_MS` (2 s) of the previous one extends it. Every `COMBO_STEP` (3rd) pair of a chain earns `attackFor(combo)`: stone → tilt → fog → shuffle, then repeating.
+    - The victim computes the same attack when it replays the attacker's `match` event on its shadow. It applies the attack to its own board at once (`Match.takeHit` → `Side.hit` → `applyAttack`) and records it as its own `hit` event, so the attacker's shadow of the victim applies the same attack at the same point. All randomness (`Board.dropStone`, `Board.shuffle`) goes through the victim board's rng. The tilt direction cycles by hit count and skips the match's gravity.
+    - The attacker keeps the attacks it earned (`Match.attacks`) and requires the victim's `hit` events to match them in order (no free shuffles).
+    - An attack that arrives after the victim cleared or ran out of time is dropped, and no `hit` event is sent. The attacker's final clearing pair never hits.
+  - **`match.ts`** is pure and tested. Event times are ms since the synced start. The host decides the result: both cleared → earlier wins; only the guest cleared → guest wins at once; only the host cleared → host wins after `GRACE_MS`; time up → after `GRACE_MS`, compare pairs left. It then sends `result`. The guest decides by itself only if no result arrives `RESULT_TIMEOUT_MS` later. Events later than `time + LATE_MS` are ignored.
+  - **`session.ts`** (`PvpSession`) lives across scenes and rematches.
+    - Both sides ping every second, which doubles as clock sync (`ClockSync`, lowest-RTT sample). Silence for `TIMEOUT_MS` (10 s) means the opponent left.
+    - The guest says `hello` only after 3 clock samples. The host then sends `start { seed, at }` in host time, and the guest converts it to its own clock.
+    - A rematch starts once both sides have sent `rematch`.
+    - `attach(link)` takes any `PeerLink`, which is how tests and the dev bot use the in-memory `linkPair` (`loopback.ts`).
+  - **`peer.ts`** wraps `RTCPeerConnection` with one negotiated, ordered data channel.
+    - Signaling is non-trickle: it waits for ICE gathering to finish (3 s cap), then sends one SDP. Each description carries a round number `n`.
+    - On `disconnected` / `failed` the host sends an ICE-restart offer with `n + 1`, and the guest answers any newer `n`.
+    - `relayed()` reads `getStats` to tell whether the selected pair uses a TURN candidate.
+  - **`signaling.ts`** is the lobby on Realtime Database: `pvpRooms/<code>` = `{ host, hostName, protocol, createdAt, guest?: { uid, name }, offer?, answer? }`.
+    - The host's room is removed by `onDisconnect`, and the guest entry likewise. `leave()` calls `goOffline`, because the free plan limits concurrent connections.
+    - It reuses `online.firebaseApp()` for anonymous auth. `firebase/database` is loaded with a dynamic import.
+    - `database.rules.json` lets only the host write the room (and create it only if the code is free). The guest can only claim an empty `guest` slot, remove itself, and write `answer`.
+  - **`turn.ts`** fetches `iceServers` from `https://<VITE_METERED_DOMAIN>/api/v1/turn/credentials?apiKey=…` (cached 10 min) and falls back to Google STUN on any error.
+  - Room codes use `CODE_ALPHABET` (no I, O, 0, 1). The rules' `$code` regex must match it.
 - **`src/toast.ts`** shows `showToast(text, 'ok' | 'error')`, a small HTML pill (`#toast` in `index.html`) centered at the top of the screen.
   - It is HTML rather than Phaser so it shows over any scene and survives scene restarts.
   - It has `pointer-events: none`, so taps go through to the game, and a new toast replaces the current one.
@@ -142,7 +182,7 @@ The code is split into a pure logic layer and a rendering layer:
   - Each scene registers `onGameResize` in `create()`. The menu simply restarts.
   - The game HUD is a thin one-row top bar (`HUD_H` = 80), because height is what limits tile size. It's laid out left to right as stage, gravity, Hint, Shuffle, Pause, time bar, score.
     - Positions come from measured text widths, and the time bar fills the leftover width.
-    - The score has a fixed slot (`SCORE_W`) on the right, so the bar doesn't move as the score grows.
+    - The score has a fixed slot (`SCORE_W`) on the right, so the bar doesn't move as the score grows. In PvP that slot is `OPP_W` and holds the opponent's name, pairs left and mini-board, and the stage label shows the player's own pairs left.
     - The rotate-gravity arrow is a separate text object, so it can update without shifting the buttons.
     - Hint (light bulb) and Shuffle (crossed arrows) are square `IconButton`s, the same `HUD_BTN` size as Pause. The remaining count sits in a badge on the top-right corner that overhangs the button, so leave a wider gap after each one. `IconButton.setCount` redraws the badge and the enabled state.
     - The high score is deliberately not shown in the HUD; the menu shows it, next to the "Bảng xếp hạng" button.
@@ -157,3 +197,5 @@ The code is split into a pure logic layer and a rendering layer:
 `storage.test.ts` and `online.test.ts` stub `localStorage` with `vi.stubGlobal(fakeStorage())` (`src/test/fakeStorage.ts`), because tests run in Node. `online.test.ts` also mocks `firebase/app`, `firebase/auth` and `firebase/firestore/lite` with `vi.mock`, and sets the Firebase config with `vi.stubEnv`. That works because `online.ts` reads `import.meta.env` at call time.
 
 `Board.test.ts` and `levels.test.ts` auto-play full boards to a clear, under every gravity mode, with stones, and through the hard phase. Those tests use random boards, so rerun the suite a few times after changing generation, gravity or stones.
+
+`match.test.ts` wires two `Match`es through a message queue and a test-controlled clock (`duel()`), and checks that the shadow board stays identical to the real one under every PvP gravity. That includes a randomized duel where both sides attack and messages arrive in delayed batches. Compare shadows only while neither side has an outcome: a finished match ignores further events. `session.test.ts` connects two `PvpSession`s with `linkPair` and fake timers, with the guest's clock 7 s off. `peer.ts`, `signaling.ts` and `turn.ts` have no unit tests (WebRTC / Realtime Database / fetch). Check them in the browser: two tabs, `?relay`, or a phone on mobile data.

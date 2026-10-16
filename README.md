@@ -97,6 +97,53 @@ Cài đặt (làm một lần):
 
 Vẫn có thể bị gửi điểm giả nằm dưới mức đó, bằng cách gọi thẳng Firebase thay vì chơi. Muốn chặn hẳn thì cần Firebase App Check với Play Integrity (xem Gợi ý phát triển tiếp).
 
+## Đấu online
+
+Khi bản build có đủ cấu hình (xem cài đặt bên dưới), menu có nút **Đấu online**. Một người chọn **Tạo phòng** và nhận mã phòng 6 ký tự (không có I, O, 0, 1 để khỏi đọc nhầm), người kia chọn **Vào phòng** rồi nhập mã đó. Hai máy kết nối với nhau, đếm ngược 3 giây rồi cùng bắt đầu.
+
+Luật của một trận "đua dọn bàn" (`src/pvp/match.ts`):
+
+- Hai bên cùng một bàn 6 x 14 (mỗi loại hình 4 ô). Kiểu dồn chọn ngẫu nhiên trong Cổ điển, Dồn xuống, Dồn trái, Dồn lên, Dồn phải.
+- Ai dọn sạch bàn trước thì thắng. Hết 4 phút thì ai còn ít cặp hơn thắng, bằng nhau là hòa. Ăn cặp không được cộng giờ.
+- Mỗi trận có 3 lượt Gợi ý và 3 lượt Đảo bàn. Bàn bế tắc thì tự đảo, không tốn lượt.
+- **Tấn công bằng chuỗi** (`src/pvp/attacks.ts`): ăn cặp kế tiếp trong vòng 2 giây sau cặp trước thì chuỗi dài thêm. Cứ mỗi 3 cặp trong chuỗi là một đòn vào bàn đối thủ, mạnh dần theo độ dài chuỗi (chuỗi dài hơn 12 thì lặp lại từ đầu):
+
+  | Cặp thứ | Đòn | Tác dụng trên bàn đối thủ |
+  | --- | --- | --- |
+  | 3 | Thả đá | Một viên đá rơi vào một ô trống (không kề viên đá khác) |
+  | 6 | Nghiêng bàn | Các ô bị dồn hết về một phía, khác hướng dồn của trận |
+  | 9 | Che mắt | Bàn bị che kín 3 giây (vẫn chạm được, chỉ không thấy hình) |
+  | 12 | Đảo bàn | Các ô bị xáo lại, không tốn lượt Đảo bàn của họ |
+
+  Bàn chưa có ô trống nào thì đá không rơi được. Đòn tới lúc đối thủ đã dọn xong hoặc đã hết giờ thì không có tác dụng. Bị đá chặn hay bị nghiêng mà bế tắc thì bàn tự đảo như thường.
+- Không tạm dừng được: nút **II** và nút Back hỏi có đầu hàng không. App xuống nền thì đồng hồ vẫn chạy; đối thủ không nghe thấy gì từ máy bạn trong 10 giây thì được xử thắng.
+- HUD hiện số cặp còn lại của bạn, và tên, số cặp, bàn thu nhỏ của đối thủ. Hết trận có **Đấu lại** (khi cả hai cùng bấm) và **Về menu** (rời phòng).
+- Trận đấu online không tính điểm, không lên bảng xếp hạng và không đụng tới lượt chơi một mình đang lưu.
+
+Cách hoạt động:
+
+- **Tìm nhau:** phòng chờ nằm trên Firebase Realtime Database (`pvpRooms/<mã>`), dùng chung đăng nhập ẩn danh với bảng xếp hạng. Hai máy trao đổi mô tả kết nối WebRTC qua phòng chờ.
+- **Kết nối:** kênh dữ liệu WebRTC giữa hai máy. Nối thẳng được thì nối thẳng (nhờ STUN); mạng chặn nối thẳng (nhiều mạng 4G/5G, mạng công ty) thì đi qua máy chủ chuyển tiếp TURN của Metered. Tin nhắn trong trận không đi qua Firebase. Mất kết nối giữa trận (đổi mạng) thì chủ phòng tự kết nối lại.
+- **Cùng một bàn mà không phải gửi bàn:** bàn được sinh từ một hạt giống chung (`src/game/rng.ts`). Mỗi máy chỉ gửi nước đi của mình, máy kia chơi lại nước đó trên bản sao bàn của đối thủ. Đòn tấn công cũng không gửi riêng: máy bị đánh tự tính ra đòn từ thời điểm các nước đi của đối thủ, áp lên bàn mình rồi báo lại như một nước đi, nên máy kẻ tấn công kiểm tra được đòn có thật và bàn thu nhỏ hiện đúng đá, nghiêng, đảo. Nhờ vậy bàn thu nhỏ luôn đúng, và nước đi không hợp lệ (gian lận) bị phát hiện ngay: đối thủ bị xử thua. Vì thế hai máy phải cùng phiên bản: đổi luật trận đấu, `Board` hay cách sinh bàn thì tăng `PROTOCOL` trong `src/pvp/protocol.ts`, để máy khác phiên bản không vào được phòng của nhau.
+- **Phân xử:** chủ phòng phân xử thắng thua; đồng hồ hai máy được đồng bộ qua các lần ping.
+
+Cài đặt (làm một lần, sau phần Firebase ở trên):
+
+1. Firebase Console → *Build → Realtime Database → Create database*: chọn vùng gần người chơi, chế độ *locked mode*.
+2. Tab *Rules* của Realtime Database: dán nội dung file `database.rules.json` rồi bấm *Publish*.
+3. Chép địa chỉ database (dạng `https://<project>-default-rtdb.<vùng>.firebasedatabase.app`) vào `VITE_FIREBASE_DATABASE_URL` trong `.env.local`.
+4. Metered (metered.ca) → *TURN Server*: tạo một credential, chép tên miền app (dạng `<app>.metered.live`) vào `VITE_METERED_DOMAIN` và **API key của credential đó** vào `VITE_METERED_API_KEY`. Đừng dùng *Secret Key* của tài khoản: key đó không được nằm trong app. Bỏ trống thì game chỉ dùng STUN, vẫn chơi được khi hai máy nối thẳng được với nhau.
+5. Chạy lại `npm run dev`, hoặc build lại APK.
+
+Gói miễn phí của Realtime Database cho tối đa 100 kết nối cùng lúc; game chỉ kết nối khi đang ở phòng chờ hoặc trong trận, và ngắt khi rời phòng. Mỗi trận chỉ gửi vài chục KB qua TURN.
+
+Thử khi phát triển (`npm run dev`):
+
+- Hai người chơi trên cùng một máy: mở game ở hai tab. Dùng một cửa sổ ẩn danh nếu muốn hai tên khác nhau.
+- Thêm `?relay` vào địa chỉ (ví dụ `http://localhost:5173/?relay`) để buộc kết nối đi qua TURN, nhằm thử máy chủ TURN khi hai tab vốn nối thẳng được.
+- Gõ `pvpBot()` trong DevTools để đấu với máy ngay, không cần mạng hay Firebase: thử nhanh giao diện trận đấu. `pvpBot(800)` cho máy cứ 0,8 giây ăn một cặp (mặc định 2,5 giây); dưới 2 giây thì máy thành chuỗi và tấn công bạn, tiện để thử các đòn.
+- Thử thật: một máy dùng Wi-Fi, máy kia dùng 4G.
+
 ## Cấu trúc code
 
 ```
@@ -111,6 +158,7 @@ src/
     Board.test.ts       Unit test cho logic
     levels.ts           Cấu hình các màn, vòng lặp vô tận và giai đoạn khó (xem docs/stages.md)
     levels.test.ts      Unit test cho cấu hình màn, tự chơi thử mọi màn
+    rng.ts              Số ngẫu nhiên có hạt giống: hai máy đấu online sinh cùng một bàn
     scoring.ts          Điểm mỗi cặp, thưởng thời gian, giới hạn điểm mỗi màn (firestore.rules dùng)
     scoring.test.ts     Unit test: mọi màn nằm dưới giới hạn điểm, firestore.rules khớp
     storage.ts          Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi, bản kỷ lục đã gửi, bộ hình ô đang chọn, lượt chơi đang lưu
@@ -119,19 +167,33 @@ src/
     imagePacks.ts       Gom ảnh trong src/assets/tiles thành các bộ hình ô
     imagePacks.test.ts  Unit test cho việc gom và xếp thứ tự ảnh
   assets/tiles/         Các bộ hình ô bằng ảnh: Quái vật (SVG vẽ riêng), Tuxemon (pixel art CC BY-SA 4.0, kèm credits.txt)
+  pvp/                  Đấu online (xem mục Đấu online)
+    protocol.ts         Tin nhắn giữa hai máy (kiểm tra đúng dạng), mã phòng, thông báo lỗi
+    clock.ts            Đo độ lệch đồng hồ giữa hai máy qua ping
+    attacks.ts          Đòn tấn công bằng chuỗi: khi nào có đòn, tác dụng của từng đòn
+    match.ts            Luật một trận: bàn mình và bản sao bàn đối thủ, chuỗi và đòn, phát hiện nước đi không hợp lệ, phân xử
+    session.ts          Một phiên với một đối thủ: chào nhau, bắt đầu trận, đấu lại, phát hiện đối thủ rời đi
+    peer.ts             Kết nối WebRTC (kênh dữ liệu), kết nối lại khi mất mạng giữa trận
+    signaling.ts        Phòng chờ trên Firebase Realtime Database (tạo / vào phòng, trao đổi mô tả kết nối)
+    turn.ts             Lấy danh sách máy chủ STUN/TURN từ Metered
+    loopback.ts         Kết nối giả trong bộ nhớ, cho test và đấu với máy
+    bot.ts              Chỉ khi phát triển: đấu với máy (pvpBot() trong DevTools)
+    *.test.ts           Unit test cho giao thức, đồng hồ, luật trận đấu và phiên
   scenes/
     ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
     icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn), Đảo bàn (mũi tên bắt chéo) và Đổi tên (bút chì) bằng code
-    nameDialog.ts       Hộp nhập tên người chơi (HTML trong index.html, để gõ được tiếng Việt bằng bàn phím hệ thống)
-    MenuScene.ts        Màn hình chính: tên người chơi, Hình ô, Tiếp tục (khi có lượt chơi đang lưu), Chơi / Chơi mới (luôn từ màn 1), Bảng xếp hạng, Cách chơi
+    nameDialog.ts       Hộp nhập tên người chơi và mã phòng (HTML trong index.html, để gõ được tiếng Việt bằng bàn phím hệ thống)
+    MenuScene.ts        Màn hình chính: tên người chơi, Hình ô, Tiếp tục (khi có lượt chơi đang lưu), Chơi / Chơi mới (luôn từ màn 1), Đấu online, Bảng xếp hạng, Cách chơi
     LeaderboardScene.ts Bảng xếp hạng, hai thẻ: Toàn cầu (online, mỗi người chơi một dòng) và Trên máy (10 lượt chơi điểm cao nhất, kèm màn lúc thua và ngày chơi)
     TileArtScene.ts     Chọn bộ hình cho các ô, mỗi bộ kèm vài ô mẫu
-    GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua
+    PvpLobbyScene.ts    Phòng chờ đấu online: tạo phòng (hiện mã), vào phòng (nhập mã), đang kết nối, lỗi
+    GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua; cả trận đấu online
+database.rules.json     Quy tắc bảo mật của Realtime Database cho phòng chờ đấu online (dán vào Firebase Console)
 ```
 
 `Board.ts` không phụ thuộc Phaser nên có thể test riêng hoặc tái sử dụng.
 
-Luồng màn hình: `Menu` → `Game`, `Menu` → `Leaderboard` và `Menu` → `TileArt` (thẻ "Hình ô" ở góc trên bên phải menu). Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Lưu và về menu; "Chơi lại màn" tốn một lượt chơi lại như khi thua, hết lượt thì không có nút này); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
+Luồng màn hình: `Menu` → `Game`, `Menu` → `Leaderboard`, `Menu` → `TileArt` (thẻ "Hình ô" ở góc trên bên phải menu) và `Menu` → `PvpLobby` → `Game` (đấu online). Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Lưu và về menu; "Chơi lại màn" tốn một lượt chơi lại như khi thua, hết lượt thì không có nút này); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
 
 **Lưu lượt chơi.** Lượt chơi đang dở luôn được lưu trong localStorage (khóa `pairfect-saved-game`): đúng bàn đang chơi, điểm, thời gian còn lại, lượt Gợi ý / Đảo bàn / chơi lại. Trên Android còn một bản sao trong bộ nhớ riêng của app (SharedPreferences, plugin `@capacitor/preferences`), vì WebView có thể chưa kịp ghi localStorage xuống đĩa thì app đã bị tắt; lúc mở app, bản nào lưu sau thì được dùng. Game lưu khi vào màn, mỗi giây, khi tạm dừng (nên cũng lưu mỗi khi app xuống nền), khi thắng, khi thua và khi bấm "Lưu và về menu". Nhờ vậy app bị tắt ngang (vuốt khỏi danh sách app gần đây, hệ điều hành dọn app, lỗi, hết pin) vẫn chơi tiếp được, chỉ mất tối đa khoảng một giây. Có lượt chơi đang lưu thì menu có nút **Tiếp tục – Màn N** ở trên cùng; "Chơi mới" sẽ hỏi lại trước khi xóa lượt đang lưu. App bị tắt lúc đang hiện hộp thoại thua thì chơi tiếp sẽ hiện lại đúng hộp thoại đó; tắt lúc đang hiện hộp thoại qua màn thì chơi tiếp từ màn sau.
 
@@ -169,3 +231,4 @@ Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset
 - Rung khi nối thành công: plugin `@capacitor/haptics`.
 - Quảng cáo / mua trong ứng dụng: các plugin cộng đồng của Capacitor cho AdMob và Google Play Billing.
 - Chặn điểm giả gửi thẳng lên Firebase: bật Firebase App Check với Play Integrity (cần plugin native cho Capacitor, đăng ký app Android trong Firebase và đưa app lên Google Play), rồi bật Enforce cho Firestore.
+- Đấu online: tìm trận ngẫu nhiên thay vì chỉ vào phòng bằng mã; cân chỉnh các đòn tấn công (`COMBO_MS`, `COMBO_STEP`, `COMBO_ATTACKS`, `FOG_MS` trong `src/pvp/attacks.ts`) sau khi chơi thử với người thật.

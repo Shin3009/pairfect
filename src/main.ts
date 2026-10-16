@@ -4,6 +4,7 @@ import { initOnline, onSyncResult } from './online';
 import { GameScene } from './scenes/GameScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { MenuScene } from './scenes/MenuScene';
+import { PvpLobbyScene } from './scenes/PvpLobbyScene';
 import { TileArtScene } from './scenes/TileArtScene';
 import { sizeFor } from './scenes/ui';
 import { showToast } from './toast';
@@ -26,7 +27,7 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   // Scene đầu tiên trong danh sách được chạy khi mở game
-  scene: [MenuScene, GameScene, LeaderboardScene, TileArtScene],
+  scene: [MenuScene, GameScene, LeaderboardScene, TileArtScene, PvpLobbyScene],
 });
 
 // Tỉ lệ màn hình đổi (chia đôi màn hình, kéo cửa sổ): đổi chiều rộng logic cho khớp.
@@ -59,5 +60,10 @@ onSyncResult((r) => {
 });
 initOnline();
 
-// Truy cập game từ DevTools khi phát triển: window.game.scene.getScene('Game')
-if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;
+// Truy cập game từ DevTools khi phát triển: window.game.scene.getScene('Game'),
+// và pvpBot() để thử giao diện đấu online với máy, không cần mạng (xem pvp/bot.ts)
+if (import.meta.env.DEV) {
+  const w = window as unknown as { game: Phaser.Game; pvpBot: (stepMs?: number) => void };
+  w.game = game;
+  w.pvpBot = (stepMs) => void import('./pvp/bot').then(({ startBotMatch }) => startBotMatch(game, stepMs));
+}

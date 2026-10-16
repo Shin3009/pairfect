@@ -4,6 +4,7 @@ import { loadBest, loadPlayerName, loadSavedGame, type SavedGame } from '../game
 import { createTileTextures, MAX_TYPES, TEXTURE_SIZE, tileKey } from '../game/tileArt';
 import { exitApp, onBack } from '../native';
 import { syncBest } from '../online';
+import { pvpEnabled } from '../pvp/signaling';
 import { iconTexture } from './icons';
 import { askPlayerName, nameDialogBack } from './nameDialog';
 import { Button, C, onGameResize, showDialog, tapZone, textStyle, type DialogOptions } from './ui';
@@ -56,24 +57,49 @@ export class MenuScene extends Phaser.Scene {
     this.add.text(x, 245, 'Tile Connect', textStyle(40, C.textAccent, 'bold')).setOrigin(0.5);
     this.add.text(x, 305, `Kỷ lục: ${loadBest()}`, textStyle(30, C.textDim)).setOrigin(0.5);
 
-    const saved = loadSavedGame();
-    if (saved) {
-      // Có lượt chơi đang lưu: thêm nút Tiếp tục lên đầu, bốn nút thấp hơn một chút cho vừa màn hình
-      const label = `Tiếp tục – Màn ${saved.level + 1}`;
-      new Button(this, x, 396, 420, 88, label, () => this.scene.start('Game', saved), 1, 34);
-      new Button(this, x, 490, 420, 72, 'Chơi mới', () => this.confirmNewGame(saved), 1, 30);
-      new Button(this, x, 576, 420, 72, 'Bảng xếp hạng', () => this.scene.start('Leaderboard'), 1, 30);
-      new Button(this, x, 662, 420, 72, 'Cách chơi', () => this.showHowToPlay(), 1, 30);
-    } else {
-      new Button(this, x, 420, 420, 96, 'Chơi', () => this.newGame(), 1, 40);
-      new Button(this, x, 530, 420, 80, 'Bảng xếp hạng', () => this.scene.start('Leaderboard'), 1, 32);
-      new Button(this, x, 630, 420, 80, 'Cách chơi', () => this.showHowToPlay(), 1, 32);
-    }
+    this.createButtons(x);
 
     this.drawPlayerChip();
     this.drawArtChip();
     // Lần đầu mở game: hỏi tên người chơi để ghi kèm kỷ lục
     if (!loadPlayerName()) this.askName();
+  }
+
+  /**
+   * Các nút chính xếp dọc. Có lượt chơi đang lưu thì thêm nút Tiếp tục lên đầu; bản build có đấu online thì thêm
+   * nút Đấu online. Bốn hàng thì các nút thấp hơn một chút cho vừa màn hình; năm nút thì Bảng xếp hạng
+   * và Cách chơi chung một hàng.
+   */
+  private createButtons(x: number): void {
+    type Item = { label: string; onClick: () => void; w?: number };
+    const saved = loadSavedGame();
+    const rows: Item[][] = saved
+      ? [
+          [{ label: `Tiếp tục – Màn ${saved.level + 1}`, onClick: () => this.scene.start('Game', saved) }],
+          [{ label: 'Chơi mới', onClick: () => this.confirmNewGame(saved) }],
+        ]
+      : [[{ label: 'Chơi', onClick: () => this.newGame() }]];
+    if (pvpEnabled()) rows.push([{ label: 'Đấu online', onClick: () => this.scene.start('PvpLobby') }]);
+    const leaderboard: Item = { label: 'Bảng xếp hạng', onClick: () => this.scene.start('Leaderboard') };
+    const howTo: Item = { label: 'Cách chơi', onClick: () => this.showHowToPlay() };
+    if (rows.length === 3) rows.push([{ ...leaderboard, w: 250 }, { ...howTo, w: 154 }]);
+    else rows.push([leaderboard], [howTo]);
+
+    // [y, cao, cỡ chữ] của từng hàng; hàng đầu (Chơi / Tiếp tục) to hơn
+    const layout: [number, number, number][] =
+      rows.length === 3
+        ? [[420, 96, 40], [530, 80, 32], [630, 80, 32]]
+        : [[396, 88, 34], [490, 72, 30], [576, 72, 30], [662, 72, 30]];
+    rows.forEach((items, i) => {
+      const [y, h, font] = layout[i];
+      let left = x - 420 / 2;
+      for (const item of items) {
+        const w = item.w ?? 420;
+        // Hai nút chung một hàng: chữ nhỏ hơn một chút cho vừa nút
+        new Button(this, left + w / 2, y, w, h, item.label, item.onClick, 1, items.length > 1 ? font - 4 : font);
+        left += w + 16;
+      }
+    });
   }
 
   /** Hỏi tên (lần đầu) hoặc đổi tên, rồi vẽ lại thẻ tên và cập nhật tên trên kỷ lục online. */
