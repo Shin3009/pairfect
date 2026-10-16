@@ -76,7 +76,9 @@ Lần đầu mở game, người chơi được hỏi tên. Tên lưu trên máy
 
 `uid` là mã người chơi của Firebase Authentication: game tự đăng nhập ẩn danh (người chơi không phải nhập gì), phiên đăng nhập lưu trên máy nên lần sau mở app vẫn là người chơi cũ. Xóa dữ liệu app hoặc cài lại thì thành người chơi mới (document mới, document cũ vẫn còn).
 
-Game gửi khi có kỷ lục mới hoặc khi đổi tên. Mất mạng thì để đó và gửi lại khi có mạng, ở lần mở app sau hoặc sau lượt thua kế tiếp. Chưa cấu hình Firebase thì game vẫn chạy bình thường, chỉ không gửi.
+Game gửi khi có kỷ lục mới hoặc khi đổi tên. Mất mạng thì để đó và gửi lại khi có mạng, ở lần mở app sau, sau lượt thua kế tiếp hoặc khi mở bảng xếp hạng online. Mỗi lần gửi, một thông báo nhỏ hiện ở giữa mép trên màn hình vài giây: gửi được kỷ lục mới, đổi được tên, hoặc chưa gửi được (game sẽ tự thử lại). Không có gì mới để gửi thì không báo. Chưa cấu hình Firebase thì game vẫn chạy bình thường, chỉ không gửi.
+
+Màn hình **Bảng xếp hạng** có hai thẻ. Thẻ **Toàn cầu** đọc lại collection này: 10 người chơi điểm cao nhất (bằng điểm thì màn xa hơn xếp trên, vẫn bằng thì người gửi trước xếp trên), dòng của người chơi trên máy có viền vàng. Nếu họ không lọt nhóm 10 thì có thêm một dòng riêng ở cuối, kèm hạng của họ (số người điểm cao hơn cộng 1, đếm bằng truy vấn đếm của Firestore). Truy vấn chỉ sắp theo `score` nên không cần tạo chỉ mục ghép. Mỗi lần mở màn hình bảng được tải lại; mất mạng thì báo lỗi kèm nút *Thử lại*. Thẻ **Trên máy** là bảng các lượt chơi trên máy (xem Cấu trúc code). Bản build chưa cấu hình Firebase thì chỉ có bảng trên máy.
 
 Cài đặt (làm một lần):
 
@@ -101,8 +103,9 @@ Vẫn có thể bị gửi điểm giả nằm dưới mức đó, bằng cách 
 src/
   main.ts               Khởi tạo Phaser (màn ngang cao 720, rộng theo tỉ lệ màn hình)
   native.ts             Nút Back của Android và việc app bị đưa xuống nền (plugin `@capacitor/app`)
-  online.ts             Đồng bộ kỷ lục lên Cloud Firestore (đăng nhập ẩn danh, gửi lại khi có mạng)
-  online.test.ts        Unit test cho việc gửi kỷ lục (Firebase giả)
+  online.ts             Đồng bộ kỷ lục lên Cloud Firestore (đăng nhập ẩn danh, gửi lại khi có mạng), đọc bảng xếp hạng online
+  online.test.ts        Unit test cho việc gửi kỷ lục và đọc bảng online (Firebase giả)
+  toast.ts              Thông báo nhỏ ở mép trên màn hình (HTML trong index.html), ví dụ kết quả gửi kỷ lục
   game/
     Board.ts            Toàn bộ logic: sinh bàn, đá chắn, tìm đường nối, gợi ý, đảo bàn, dồn ô
     Board.test.ts       Unit test cho logic
@@ -121,7 +124,7 @@ src/
     icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn), Đảo bàn (mũi tên bắt chéo) và Đổi tên (bút chì) bằng code
     nameDialog.ts       Hộp nhập tên người chơi (HTML trong index.html, để gõ được tiếng Việt bằng bàn phím hệ thống)
     MenuScene.ts        Màn hình chính: tên người chơi, Hình ô, Chơi (luôn từ màn 1), Bảng xếp hạng, Cách chơi
-    LeaderboardScene.ts Bảng xếp hạng: 10 lượt chơi điểm cao nhất, kèm màn lúc thua và ngày chơi
+    LeaderboardScene.ts Bảng xếp hạng, hai thẻ: Toàn cầu (online, mỗi người chơi một dòng) và Trên máy (10 lượt chơi điểm cao nhất, kèm màn lúc thua và ngày chơi)
     TileArtScene.ts     Chọn bộ hình cho các ô, mỗi bộ kèm vài ô mẫu
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua
 ```
@@ -132,7 +135,7 @@ Luồng màn hình: `Menu` → `Game`, `Menu` → `Leaderboard` và `Menu` → `
 
 Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu (ở hộp thoại qua màn thì không làm gì, để lỡ tay không mất lượt chơi đang thắng); ở bảng xếp hạng và màn chọn hình ô thì về menu; ở menu thì đóng hộp thoại đang mở (kể cả hộp đổi tên; hộp nhập tên lần đầu thì bắt buộc nhập nên Back không làm gì), hoặc hỏi có thoát game không.
 
-Bảng xếp hạng chỉ lưu trên máy (localStorage), giữ 10 lượt chơi điểm cao nhất. Một lượt chơi được ghi khi **thua** (hết giờ hoặc hết nước đi), với điểm cuối cùng và màn đang chơi lúc thua; hộp thoại thua báo hạng nếu lọt vào bảng. Bỏ cuộc thì không ghi: rời màn từ menu tạm dừng (Chơi lại màn / Về menu), hoặc về menu sau khi qua màn. Bằng điểm thì màn xa hơn xếp trên, vẫn bằng thì lượt chơi trước xếp trên. "Kỷ lục" ở menu là điểm cao nhất trên bảng.
+Bảng xếp hạng trên máy (thẻ *Trên máy*) lưu trong localStorage, giữ 10 lượt chơi điểm cao nhất. Một lượt chơi được ghi khi **thua** (hết giờ hoặc hết nước đi), với điểm cuối cùng và màn đang chơi lúc thua; hộp thoại thua báo hạng nếu lọt vào bảng. Bỏ cuộc thì không ghi: rời màn từ menu tạm dừng (Chơi lại màn / Về menu), hoặc về menu sau khi qua màn. Bằng điểm thì màn xa hơn xếp trên, vẫn bằng thì lượt chơi trước xếp trên. "Kỷ lục" ở menu là điểm cao nhất trên bảng.
 
 ### Chỉ chơi màn ngang
 
@@ -163,5 +166,4 @@ Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset
 - Âm thanh khi chọn, khi nối, khi qua màn (`this.load.audio` + `this.sound.play`).
 - Rung khi nối thành công: plugin `@capacitor/haptics`.
 - Quảng cáo / mua trong ứng dụng: các plugin cộng đồng của Capacitor cho AdMob và Google Play Billing.
-- Bảng xếp hạng chung: đọc collection `highscores` sắp theo `score` giảm dần (`firestore.rules` đã cho đọc), mỗi document là một người chơi.
 - Chặn điểm giả gửi thẳng lên Firebase: bật Firebase App Check với Play Integrity (cần plugin native cho Capacitor, đăng ký app Android trong Firebase và đưa app lên Google Play), rồi bật Enforce cho Firestore.

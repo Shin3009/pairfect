@@ -65,11 +65,21 @@ The code is split into a pure logic layer and a rendering layer:
   - It lives outside the scenes on purpose: the soft keyboard can resize the game, which restarts the menu, and the dialog must survive that.
   - Phaser hit-tests window-level touches even when they land outside the canvas, so the dialog stops propagation of touch, mouse and key events; otherwise a tap on it would also press the menu button underneath.
   - Its CSS sizes everything in `--u` (one logical game pixel, `min(100vh / 720, 100vw / 1100)`) so it matches `showDialog`. It sits in the top half of the screen because a landscape soft keyboard covers the bottom.
-- **`src/online.ts`** keeps one Firestore row per player, `highscores/<uid>` = `{ name, score, stage, updatedAt }`, in sync with the device's best. `firebase/app`, `firebase/auth` and `firebase/firestore/lite` are loaded with dynamic imports on the first send, so they stay out of the main bundle.
+- **`src/online.ts`** keeps one Firestore row per player, `highscores/<uid>` = `{ name, score, stage, updatedAt }`, in sync with the device's best. `firebase/app`, `firebase/auth` and `firebase/firestore/lite` are loaded with dynamic imports on the first send (or the first leaderboard read), so they stay out of the main bundle.
   - `uid` comes from Firebase Anonymous Auth. `initializeAuth` is used with IndexedDB persistence rather than `getAuth()`, which also loads the popup/redirect resolver. The session survives restarts, so the player keeps the same row.
   - `syncBest()` compares the wanted row (current name plus `loadLeaderboard()[0]`, if its score is above 0) with the last successful upload (`loadSyncedBest()`), and uploads only when they differ. It runs at launch and on the window `online` event (`initOnline` in `main.ts`), after every loss (`GameScene.loseLevel`), and after the name is set or changed.
   - On any error (offline, auth or rules) it logs a warning and leaves the synced marker unchanged, so the next trigger retries. Re-uploading is idempotent.
+  - Every actual upload attempt is reported to `onSyncResult` listeners as a `SyncResult`: `{ ok: false, best }`, or `{ ok: true, best, previous }`, where `previous` is the marker before this upload. A call that has nothing new to send reports nothing.
+    - `main.ts` turns each result into a toast: "Đã gửi kỷ lục N điểm…", "Đã đổi tên…" (when only the name changed), or an error.
+    - `online.ts` itself stays DOM-free so it can be tested in Node.
+- **`src/toast.ts`** shows `showToast(text, 'ok' | 'error')`, a small HTML pill (`#toast` in `index.html`) centered at the top of the screen.
+  - It is HTML rather than Phaser so it shows over any scene and survives scene restarts.
+  - It has `pointer-events: none`, so taps go through to the game, and a new toast replaces the current one.
+  - It is sized in `--u`, like the name dialog. It needs `width: max-content`, because with `left: 50%` a fixed element otherwise shrinks to the right half of the screen and wraps early.
   - While a sync is running, further calls return at once; when the upload finishes, the loop rechecks and sends anything newer.
+  - `fetchOnlineBoard(size)` reads the online leaderboard: it runs `syncBest()` first (so a pending best shows up), then fetches the top `size` rows. It orders only by `score`, because adding `stage` would need a composite index; ties are re-sorted on the client with `compareEntries`. Other players' names go through `cleanName`, and malformed rows are dropped.
+    - It finds the player's own row only through an existing auth session; it never signs in just to read. If the player is outside the top, their rank is `getCount(score > theirs) + 1`, but never above `size + 1`.
+    - It rejects after `LOAD_TIMEOUT_MS` (15 s). `onlineEnabled()` says whether the build has a Firebase config at all.
   - `firestore.rules` makes the collection world-readable. Only the owner (`request.auth.uid == uid`) can write their row; on update the score may not decrease; there are no deletes. Writes must have exactly those fields, an int `score` in `(0, stage * 1700]`, and `updatedAt == request.time`. The rules are checked against the Firestore emulator by hand, not by `npm test`.
 - **`src/scenes/ui.ts`** holds shared UI: the sizing helpers (`GAME_H`, `GAME_MIN_W` / `GAME_MAX_W`, `sizeFor`, `onGameResize`), the color palette `C`, `textStyle`, `Button`, `IconButton`, and `showDialog`.
   - **`src/scenes/icons.ts`** draws button icons with the Canvas 2D API on a 24×24 grid, in white, under the keys `icon-<name>`. `iconTexture(scene, name)` creates a texture on first use, and `IconButton` tints it.
@@ -82,9 +92,12 @@ The code is split into a pure logic layer and a rendering layer:
   - the chosen tile art set id (`pairfect-tile-art`, a plain string; validated by `tileArt.selectedTileArt`, not by storage).
 
   The high score (`loadBest`) is the leaderboard's top score; the old separate `pairfect-best` key is no longer read or written.
-  - The leaderboard is local only: the top `LEADERBOARD_SIZE` (10) runs as `{ score, stage, date }`, where `stage` is 1-based like the HUD. Ties rank by higher stage, then the older run. `insertEntry` is the pure ranking step; `loadLeaderboard` drops malformed rows.
+  - The local leaderboard keeps the top `LEADERBOARD_SIZE` (10) runs as `{ score, stage, date }`, where `stage` is 1-based like the HUD. Ties rank by higher stage, then the older run. `insertEntry` is the pure ranking step; `loadLeaderboard` drops malformed rows.
   - A run is recorded only when it is lost (`GameScene.loseLevel`: time out or no moves left), and the lose dialog shows the rank if it made the board. Giving up never records: leaving from the pause menu, or going to the menu from the win dialog. So a given-up run counts toward neither the leaderboard nor the high score.
-  - `LeaderboardScene` shows the table, with a "Quay lại" button back to `Menu`.
+  - `LeaderboardScene` has two tabs, "Toàn cầu" (online, `fetchOnlineBoard`) and "Trên máy" (this local table), plus a "Quay lại" button back to `Menu`. A build without a Firebase config shows only the local table, with no tabs.
+    - The last tab is remembered for the session. The online board is fetched again each time the screen is opened from the menu, and shows a loading, error (with "Thử lại") or empty state.
+    - On a resize the scene sets `keepOnline` and restarts, keeping the loaded board (or the load in flight). It uses an instance flag, not scene data, because Phaser keeps the last `restart` data when a later `scene.start` passes none.
+    - The player's own row has a gold outline. If they are outside the top 10, it is shown as an extra row at the bottom. A `loads` counter makes the scene ignore results from an older fetch.
 - **`src/game/levels.ts`** defines the `LEVELS` array: `rows`, `cols` (wide, short boards that grow to a maximum of 8×20), `types`, gravity mode and time for each level. After the last level, `getLevel(i)` continues endlessly:
   - The board and `types` stay those of the last level.
   - The gravity cycles through the levels' gravities in order.

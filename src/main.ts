@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { bindAppEvents } from './native';
-import { initOnline } from './online';
+import { initOnline, onSyncResult } from './online';
 import { GameScene } from './scenes/GameScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { MenuScene } from './scenes/MenuScene';
 import { TileArtScene } from './scenes/TileArtScene';
 import { sizeFor } from './scenes/ui';
+import { showToast } from './toast';
 
 // Khung chứa game: cả màn hình trừ phần tai thỏ / camera đục lỗ (xem index.html)
 const parent = document.getElementById('game')!;
@@ -45,7 +46,14 @@ game.events.once(Phaser.Core.Events.READY, fitViewport);
 // Nút Back của Android và việc app bị đưa xuống nền (xem native.ts)
 bindAppEvents(game);
 
-// Đồng bộ kỷ lục lên Firebase, gửi lại nếu lần chơi trước chưa gửi được (xem online.ts)
+// Đồng bộ kỷ lục lên Firebase, gửi lại nếu lần chơi trước chưa gửi được (xem online.ts).
+// Mỗi lần gửi đều báo cho người chơi bằng thông báo nhỏ, ở bất kỳ màn hình nào.
+onSyncResult((r) => {
+  if (!r.ok) showToast('Chưa gửi được kỷ lục lên bảng xếp hạng, sẽ thử lại sau.', 'error');
+  else if (r.previous?.score === r.best.score && r.previous.stage === r.best.stage)
+    showToast(`Đã đổi tên trên bảng xếp hạng thành ${r.best.name}`);
+  else showToast(`Đã gửi kỷ lục ${r.best.score} điểm lên bảng xếp hạng`);
+});
 initOnline();
 
 // Truy cập game từ DevTools khi phát triển: window.game.scene.getScene('Game')
