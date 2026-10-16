@@ -77,6 +77,28 @@ export class Board {
     this.ensurePlayable();
   }
 
+  /**
+   * Nạp lại bàn đã lưu (lưới có viền, cùng dạng `grid`). Lưới không hợp lệ thì trả về false và để nguyên bàn:
+   * sai kích thước, viền không trống, giá trị không phải ô trống / đá / loại 1..maxType,
+   * hoặc có loại hình lẻ số ô (sẽ không bao giờ dọn sạch được).
+   */
+  load(grid: number[][], maxType: number): boolean {
+    if (grid.length !== this.rows + 2) return false;
+    const counts = new Map<number, number>();
+    for (let r = 0; r < grid.length; r++) {
+      if (grid[r].length !== this.cols + 2) return false;
+      for (let c = 0; c < grid[r].length; c++) {
+        const v = grid[r][c];
+        const border = r === 0 || c === 0 || r === this.rows + 1 || c === this.cols + 1;
+        if (border ? v !== 0 : !(Number.isInteger(v) && v >= STONE && v <= maxType)) return false;
+        if (v > 0) counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+    }
+    if ([...counts.values()].some((n) => n % 2 !== 0)) return false;
+    this.grid = grid.map((row) => [...row]);
+    return true;
+  }
+
   get(p: Point): number {
     return this.grid[p.r][p.c];
   }

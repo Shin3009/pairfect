@@ -2,20 +2,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeStorage } from '../test/fakeStorage';
 import {
   addToLeaderboard,
+  clearSavedGame,
   cleanName,
   insertEntry,
   LEADERBOARD_SIZE,
   loadBest,
   loadLeaderboard,
   loadPlayerName,
+  loadSavedGame,
   loadSyncedBest,
   loadTileArt,
   NAME_MAX,
+  rankFor,
+  restoreSavedGame,
+  saveGame,
   savePlayerName,
+  setSavedGameMirror,
   saveSyncedBest,
   saveTileArt,
   type LeaderboardEntry,
   type OnlineBest,
+  type SavedGame,
+  type SavedPlay,
 } from './storage';
 
 const KEY = 'pairfect-leaderboard';
@@ -68,6 +76,15 @@ describe('bảng xếp hạng trong localStorage', () => {
       [120, 2],
       [80, 1],
     ]);
+  });
+
+  it('rankFor báo đúng hạng sẽ được ghi mà không ghi gì', () => {
+    addToLeaderboard(300, 4);
+    addToLeaderboard(100, 2);
+    expect(rankFor(200, 3)).toBe(2);
+    expect(rankFor(100, 2)).toBe(3); // bằng điểm bằng màn thì lượt mới đứng dưới
+    expect(loadLeaderboard()).toHaveLength(2);
+    expect(addToLeaderboard(200, 3)).toBe(2);
   });
 
   it('kỷ lục là điểm cao nhất trên bảng, bảng trống thì là 0', () => {
@@ -167,6 +184,120 @@ describe('kỷ lục đã gửi lên mạng trong localStorage', () => {
     expect(loadSyncedBest()).toBeNull();
     localStorage.setItem('pairfect-synced-best', '{hỏng');
     expect(loadSyncedBest()).toBeNull();
+  });
+});
+
+describe('lượt chơi đang lưu trong localStorage', () => {
+  beforeEach(() => vi.stubGlobal('localStorage', fakeStorage()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  const SAVE_KEY = 'pairfect-saved-game';
+  const play: SavedPlay = {
+    score: 1230,
+    hints: 4,
+    shuffles: 2,
+    timeLeft: 87.5,
+    matches: 9,
+    grid: [[0, 0, 0, 0], [0, 1, 1, 0], [0, 0, 0, 0]],
+    lost: 'moves',
+  };
+  const game: SavedGame = { level: 6, score: 1100, hints: 1, shuffles: 0, retries: 2, play };
+
+  it('chưa lưu thì null; lưu rồi đọc lại, xóa thì về null', () => {
+    expect(loadSavedGame()).toBeNull();
+    saveGame(game);
+    expect(loadSavedGame()).toEqual(game);
+    const atStageStart = { level: 7, score: 1500, hints: 3, shuffles: 1, retries: 2 };
+    saveGame(atStageStart);
+    expect(loadSavedGame()).toEqual(atStageStart);
+    clearSavedGame();
+    expect(loadSavedGame()).toBeNull();
+  });
+
+  it('dữ liệu hỏng thì null; chỉ phần màn chơi dở hỏng thì bỏ phần đó, vẫn chơi tiếp từ đầu màn', () => {
+    const stored = (g: unknown) => JSON.stringify({ savedAt: 1, game: g });
+    for (const raw of ['{không phải json', '[]', JSON.stringify(game), stored({ level: 1 }), stored({ ...game, retries: -1 }), stored({ ...game, level: 1.5 })]) {
+      localStorage.setItem(SAVE_KEY, raw);
+      expect(loadSavedGame()).toBeNull();
+    }
+    const { play: _, ...entry } = game;
+    for (const badPlay of [{ ...play, timeLeft: 'x' }, { ...play, grid: [[0, 'a']] }, { ...play, lost: 'boom' }, { ...play, matches: -1 }]) {
+      localStorage.setItem(SAVE_KEY, stored({ ...game, play: badPlay }));
+      expect(loadSavedGame()).toEqual(entry);
+    }
+  });
+
+  describe('bản sao (Android)', () => {
+    afterEach(() => {
+      setSavedGameMirror(null);
+      vi.useRealTimers();
+    });
+
+    /** Bản lưu dạng chuỗi như lúc ghi vào lúc `t`. */
+    const at = (t: number, g: SavedGame | null) => {
+      vi.useFakeTimers({ now: t });
+      if (g) saveGame(g);
+      else clearSavedGame();
+      return localStorage.getItem(SAVE_KEY)!;
+    };
+
+    it('mỗi lần lưu hay xóa đều ghi cùng một chuỗi vào bản sao', () => {
+      const copies: string[] = [];
+      setSavedGameMirror((raw) => copies.push(raw));
+      saveGame(game);
+      expect(copies.at(-1)).toBe(localStorage.getItem(SAVE_KEY));
+      clearSavedGame();
+      expect(copies).toHaveLength(2);
+      expect(copies.at(-1)).toBe(localStorage.getItem(SAVE_KEY));
+    });
+
+    it('bản sao mới hơn (localStorage chưa kịp ghi xuống đĩa) thay cho bản trong localStorage', () => {
+      at(100, { ...game, level: 2 });
+      const copy = at(200, game);
+      at(100, { ...game, level: 2 }); // localStorage mất lần lưu cuối
+      expect(restoreSavedGame(copy)).toBeNull();
+      expect(loadSavedGame()).toEqual(game);
+    });
+
+    it('bản trong localStorage mới hơn thì giữ nguyên và trả về để ghi lại vào bản sao', () => {
+      const copy = at(100, { ...game, level: 2 });
+      const local = at(200, game);
+      expect(restoreSavedGame(copy)).toBe(local);
+      expect(restoreSavedGame(null)).toBe(local);
+      expect(restoreSavedGame(local)).toBeNull();
+      expect(loadSavedGame()).toEqual(game);
+    });
+
+    it('lượt chơi đã kết thúc (dấu đã xóa mới hơn) không sống lại từ bản sao cũ', () => {
+      const oldCopy = at(100, game);
+      at(200, null);
+      expect(restoreSavedGame(oldCopy)).not.toBeNull();
+      expect(loadSavedGame()).toBeNull();
+    });
+
+    it('bản sao hỏng hoặc không có thì coi như cũ nhất', () => {
+      expect(restoreSavedGame('{hỏng')).toBeNull(); // cả hai đều không có gì
+      at(100, game);
+      expect(restoreSavedGame('{hỏng')).not.toBeNull();
+      expect(loadSavedGame()).toEqual(game);
+    });
+  });
+
+  it('trình duyệt chặn lưu trữ: không lỗi, không có lượt chơi đang lưu', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    });
+    saveGame(game);
+    clearSavedGame();
+    expect(loadSavedGame()).toBeNull();
   });
 });
 

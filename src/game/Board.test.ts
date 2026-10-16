@@ -142,6 +142,35 @@ describe('đá', () => {
   });
 });
 
+describe('load', () => {
+  it('nạp lại đúng bàn đã lưu (bản sao, không dùng chung mảng) và chơi tiếp được', () => {
+    const saved = boardFrom(['1.#2', '2..1']).grid;
+    const b = new Board(2, 4);
+    expect(b.load(saved, 2)).toBe(true);
+    expect(b.grid).toEqual(saved);
+    expect(b.grid[1]).not.toBe(saved[1]);
+    expect(b.findPath(P(1, 1), P(2, 4))).not.toBeNull();
+  });
+
+  it('lưới không hợp lệ thì trả về false và để nguyên bàn', () => {
+    const b = boardFrom(['12', '21']);
+    const before = b.grid.map((row) => [...row]);
+    const good = () => boardFrom(['33', '44']).grid;
+    const bad: number[][][] = [
+      boardFrom(['33']).grid, // sai số hàng
+      boardFrom(['333.', '3...']).grid, // sai số cột
+      boardFrom(['34', '43']).grid.map((row, r) => (r === 0 ? [0, 3, 0, 0] : row)), // viền có ô
+      boardFrom(['35', '53']).grid, // loại vượt maxType
+      boardFrom(['33', '4.']).grid, // loại 4 lẻ số ô
+      good().map((row, r) => (r === 1 ? [0, 1.5, 3, 0] : row)), // không phải số nguyên
+      good().map((row, r) => (r === 1 ? [0, -2, 3, 0] : row)), // giá trị âm lạ
+    ];
+    for (const grid of bad) expect(b.load(grid, 4)).toBe(false);
+    expect(b.grid).toEqual(before);
+    expect(b.load(good(), 4)).toBe(true);
+  });
+});
+
 describe('generate & shuffle', () => {
   it('mỗi loại xuất hiện số chẵn lần và luôn có nước đi', () => {
     for (let i = 0; i < 20; i++) {

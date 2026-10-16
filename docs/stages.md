@@ -16,7 +16,7 @@ Toàn bộ dữ liệu màn chơi nằm trong `LEVELS` ở [`src/game/levels.ts`
   - **+3 lần Gợi ý**, mỗi lần chỉ ra một cặp nối được.
   - **+3 lần Đảo bàn**, mỗi lần xáo lại các ô còn lại vào đúng những vị trí đó.
   - Lượt chưa dùng được **cộng dồn** sang màn sau trong cùng một lượt chơi. Ví dụ qua màn 1 còn 2 Gợi ý và 2 Đảo bàn thì màn 2 có 2 + 3 = 5 Gợi ý và 5 Đảo bàn. Hộp thoại qua màn hiện số lượt mang sang.
-  - Giống điểm, lượt cộng dồn mất khi bắt đầu lượt chơi mới: chơi từ menu, chơi lại sau khi hết giờ, hoặc chọn "Chơi lại màn" khi tạm dừng đều quay về 3 Gợi ý và 3 Đảo bàn.
+  - Giống điểm, lượt cộng dồn mất khi bắt đầu lượt chơi mới từ menu ("Chơi" / "Chơi mới"): quay về 3 Gợi ý và 3 Đảo bàn. Chơi lại màn (sau khi thua hoặc khi tạm dừng) thì không phải lượt chơi mới (xem phần "Tiến độ và chơi lại").
 - **Tự động đảo bàn tốn lượt.** Khi không còn cặp nào nối được, bàn tự xáo lại và **trừ 1 lượt Đảo bàn** của người chơi, kèm thông báo "Hết nước đi – tự dùng 1 lượt Đảo bàn". Nếu đã hết lượt Đảo bàn thì **thua màn** ngay ("Hết nước đi!"), giống như hết giờ.
 - **Cách chia loại hình.** Các cặp được chia lần lượt cho từng loại: loại 1, loại 2, … tới số loại của màn, rồi quay lại loại 1.
   - Khi số cặp đúng bằng hai lần số loại, mỗi loại có **4 ô**: 2 cặp, ghép kiểu nào cũng được.
@@ -140,9 +140,11 @@ Kiểu dồn hai hướng làm các ô di chuyển nhiều hơn sau mỗi lần 
 ## Tiến độ và chơi lại
 
 - **Luôn bắt đầu từ màn 1.** Không có màn hình chọn màn. Nút "Chơi" ở menu luôn bắt đầu lượt chơi mới từ màn 1 với 0 điểm. Các màn sau chỉ đến được bằng cách chơi tiếp qua nút "Màn tiếp theo".
-- **Hết giờ.** Nút "Chơi lại" bắt đầu lại **đúng số màn đó**, giữ nguyên vòng và thời gian đã giảm, với điểm về 0. Chơi lại từ menu tạm dừng cũng vậy.
-- **Bảng xếp hạng.** Chỉ ghi khi thua (hết giờ hoặc hết nước đi): điểm cuối cùng của lượt chơi và màn đang chơi lúc thua, lưu với khóa `pairfect-leaderboard`, giữ 10 lượt cao nhất. Bỏ cuộc (rời màn từ menu tạm dừng, hoặc về menu sau khi qua màn) thì không ghi.
-- **Kỷ lục.** "Kỷ lục" ở menu là điểm cao nhất trên bảng xếp hạng, nên điểm của lượt bỏ cuộc cũng không tính vào kỷ lục.
+- **Thua màn (hết giờ hoặc hết nước đi).** Nút "Chơi lại" chơi lại **đúng màn đó**, với điểm, lượt Gợi ý và lượt Đảo bàn như lúc mới vào màn; điểm kiếm được trong lần thua bị bỏ. Cả lượt chơi chỉ có **3 lượt chơi lại** (`RETRIES_PER_RUN` trong `src/scenes/GameScene.ts`), lượt còn lại mang sang màn sau. Hết lượt thì hộp thoại thua chỉ còn nút "Về menu".
+- **"Chơi lại màn" khi tạm dừng** giống hệt "Chơi lại" sau khi thua: tốn một trong 3 lượt chơi lại của cả lượt chơi, chơi lại màn đó với điểm và lượt trợ giúp lúc mới vào màn. Menu tạm dừng hiện số lượt còn lại; hết lượt thì không còn nút này.
+- **Lưu và chơi tiếp.** Lượt chơi luôn được lưu (đúng bàn đang chơi, điểm, thời gian, các lượt trợ giúp và chơi lại), nên "Lưu và về menu" hay app bị tắt ngang đều chơi tiếp được bằng nút "Tiếp tục – Màn N" ở menu. Chơi tiếp không đổi bàn, không trả lại thời gian. Bản cập nhật game đổi kích thước bàn của màn đang lưu thì màn đó chơi lại từ đầu, với điểm và lượt trợ giúp lúc vào màn.
+- **Bảng xếp hạng.** Chỉ ghi khi về menu từ hộp thoại thua (nút "Về menu" hoặc nút Back): điểm cuối cùng của lượt chơi và màn đang chơi lúc thua, lưu với khóa `pairfect-leaderboard`, giữ 10 lượt cao nhất. Lượt chơi bị bỏ để chơi lượt mới ("Chơi mới" ở menu) thì không ghi.
+- **Kỷ lục.** "Kỷ lục" ở menu là điểm cao nhất trên bảng xếp hạng, nên điểm của lượt chơi đang lưu hay lượt bị bỏ đều không tính vào kỷ lục.
 
 ## Chỉnh sửa các màn
 

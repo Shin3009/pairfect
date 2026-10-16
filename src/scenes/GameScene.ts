@@ -1,9 +1,17 @@
 import Phaser from 'phaser';
 import { Board, same, type Gravity, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
-import { createTileTextures, ensureTileTextures, textureFor, textureHeight, TEXTURE_SIZE } from '../game/tileArt';
+import { createTileTextures, ensureTileTextures, MAX_TYPES, textureFor, textureHeight, TEXTURE_SIZE } from '../game/tileArt';
 import { POINTS_PER_SECOND_LEFT, SCORE_PER_PAIR } from '../game/scoring';
-import { addToLeaderboard } from '../game/storage';
+import {
+  addToLeaderboard,
+  clearSavedGame,
+  rankFor,
+  saveGame,
+  type LoseReason,
+  type SavedGame,
+  type SavedPlay,
+} from '../game/storage';
 import { onBack, onSuspend } from '../native';
 import { syncBest } from '../online';
 import { Button, C, IconButton, onGameResize, showDialog, textStyle, type DialogOptions } from './ui';
@@ -35,19 +43,29 @@ const MAX_TILE_ASPECT = 1.25;
 /** Lượt Gợi ý / Đảo bàn được cộng thêm khi vào mỗi màn; lượt chưa dùng mang sang màn sau. */
 const HINTS_PER_LEVEL = 3;
 const SHUFFLES_PER_LEVEL = 3;
+/** Số lần được chơi lại màn vừa thua trong cả lượt chơi; hết thì thua là kết thúc lượt chơi. */
+const RETRIES_PER_RUN = 3;
 // Điểm mỗi cặp và điểm thưởng thời gian nằm trong game/scoring.ts (firestore.rules dựa vào chúng)
 const TIME_BONUS_PER_PAIR = 1; // giây cộng thêm mỗi lần ăn cặp
+/**
+ * Khoảng lưu màn đang chơi dở, ngoài các lần lưu khi vào màn, tạm dừng (cả khi app xuống nền), thắng, thua.
+ * App bị tắt ngang (lỗi, hết pin) thì mất tối đa chừng này thời gian chơi.
+ */
+const AUTOSAVE_MS = 1000;
 
 /** Mũi tên chỉ hướng dồn kế tiếp của kiểu Xoay vòng. */
 const ARROW: Partial<Record<Gravity, string>> = { down: '↓', left: '←', up: '↑', right: '→' };
 
-export interface SceneData {
-  level?: number;
-  score?: number;
-  /** Lượt Gợi ý / Đảo bàn còn dư từ màn trước, cộng dồn với lượt của màn này. */
-  hints?: number;
-  shuffles?: number;
-}
+const LOSE_TEXT: Record<LoseReason, { title: string; reason?: string }> = {
+  time: { title: 'Hết giờ!' },
+  moves: { title: 'Hết nước đi!', reason: 'Không còn cặp nào nối được và đã hết lượt Đảo bàn.' },
+};
+
+/**
+ * Dữ liệu vào màn (xem SavedGame): điểm, lượt mang sang, lượt chơi lại, và màn chơi dở khi chơi tiếp từ bản lưu.
+ * Trường bỏ trống là của lượt chơi mới: 0 điểm, không lượt mang sang, RETRIES_PER_RUN lượt chơi lại.
+ */
+export type SceneData = Partial<SavedGame>;
 
 interface Rect {
   x: number;
@@ -84,7 +102,16 @@ export class GameScene extends Phaser.Scene {
   private timeLeft = 0;
   private hints = HINTS_PER_LEVEL;
   private shuffles = SHUFFLES_PER_LEVEL;
+  private retries = RETRIES_PER_RUN;
+  /** Chỗ vào màn (không có `play`): để chơi lại màn đúng như lúc mới vào, và là phần đầu của bản lưu. */
+  private entry!: SavedGame;
+  /** Màn chơi dở đọc từ bản lưu, nạp vào bàn trong create(). */
+  private resumePlay: SavedPlay | null = null;
+  /** Đã thua màn (đang hiện hộp thoại thua), để bản lưu dựng lại đúng hộp thoại đó. */
+  private lost: LoseReason | null = null;
   private ended = false;
+  /** Đã ghi lượt chơi lên bảng xếp hạng: chạm hai lần cùng lúc không ghi hai dòng. */
+  private recorded = false;
   private paused = false;
   /** Số cặp đã ăn trong màn; quyết định hướng dồn của kiểu Xoay vòng. */
   private matches = 0;
@@ -105,15 +132,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   init(data: SceneData): void {
-    this.levelIndex = data.level ?? 0;
-    this.score = data.score ?? 0;
+    this.entry = {
+      level: data.level ?? 0,
+      score: data.score ?? 0,
+      hints: data.hints ?? 0,
+      shuffles: data.shuffles ?? 0,
+      retries: data.retries ?? RETRIES_PER_RUN,
+    };
+    this.resumePlay = data.play ?? null;
+    this.levelIndex = this.entry.level;
+    this.score = this.entry.score;
     this.cfg = getLevel(this.levelIndex);
     this.timeLeft = this.cfg.time;
-    this.hints = (data.hints ?? 0) + HINTS_PER_LEVEL;
-    this.shuffles = (data.shuffles ?? 0) + SHUFFLES_PER_LEVEL;
+    this.hints = this.entry.hints + HINTS_PER_LEVEL;
+    this.shuffles = this.entry.shuffles + SHUFFLES_PER_LEVEL;
+    this.retries = this.entry.retries;
+    this.lost = null;
     this.selected = null;
     this.hintMove = null;
     this.ended = false;
+    this.recorded = false;
     this.matches = 0;
     this.hud = [];
     this.dialog = null;
@@ -126,7 +164,10 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(C.bg);
 
     this.board = new Board(this.cfg.rows, this.cfg.cols);
-    this.board.generate(this.cfg.types, this.cfg.stones ?? 0);
+    // Chơi tiếp màn đang lưu dở. Bàn đã lưu không khớp màn (bản cập nhật game đổi các màn) thì chơi màn này từ đầu
+    const play = this.resumePlay && this.board.load(this.resumePlay.grid, MAX_TYPES) ? this.resumePlay : null;
+    if (play) this.restore(play);
+    else this.board.generate(this.cfg.types, this.cfg.stones ?? 0);
 
     this.layoutBoard();
     this.createTiles();
@@ -138,11 +179,57 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointer(p));
     this.time.addEvent({ delay: 100, loop: true, callback: () => this.tick(0.1) });
+    // Thắng / thua đã lưu lúc kết thúc màn, không lưu đè
+    this.time.addEvent({
+      delay: AUTOSAVE_MS,
+      loop: true,
+      callback: () => {
+        if (!this.ended) this.saveProgress();
+      },
+    });
     onGameResize(this, () => this.relayout());
     // Nút Back của Android: làm việc của hộp thoại đang mở, không có hộp thoại thì tạm dừng
     onBack(this, () => (this.dialog ? this.dialog.opts.back?.() : this.pause()));
-    // App bị đưa xuống nền: tạm dừng, để khi quay lại đồng hồ không chạy tiếp ngay
+    // App bị đưa xuống nền: tạm dừng (và lưu), để khi quay lại đồng hồ không chạy tiếp ngay,
+    // còn nếu app bị tắt hẳn (vuốt khỏi danh sách app gần đây) thì vẫn chơi tiếp được từ menu
     onSuspend(this, () => this.pause());
+
+    if (play?.lost) {
+      // App bị tắt lúc đang hiện hộp thoại thua: hiện lại đúng hộp thoại đó
+      this.loseLevel(play.lost);
+      return;
+    }
+    // Bản lưu có thể rơi đúng lúc bàn vừa dọn sạch hay vừa bế tắc, trước khi kịp qua màn / tự đảo bàn
+    if (play) this.checkBoard();
+    this.saveProgress();
+  }
+
+  /** Lấy lại trạng thái màn chơi dở từ bản lưu (bàn đã nạp xong bằng Board.load). */
+  private restore(play: SavedPlay): void {
+    this.score = play.score;
+    this.hints = play.hints;
+    this.shuffles = play.shuffles;
+    this.timeLeft = Math.min(play.timeLeft, this.cfg.time);
+    this.matches = play.matches;
+  }
+
+  /**
+   * Lưu lượt chơi để chơi tiếp được từ menu, kể cả khi app bị tắt ngang: chỗ vào màn kèm màn đang chơi dở.
+   * Gọi khi vào màn, mỗi AUTOSAVE_MS, khi tạm dừng (cả khi app xuống nền), khi thua và khi về menu.
+   */
+  private saveProgress(): void {
+    saveGame({
+      ...this.entry,
+      play: {
+        score: this.score,
+        hints: this.hints,
+        shuffles: this.shuffles,
+        timeLeft: this.timeLeft,
+        matches: this.matches,
+        grid: this.board.grid,
+        ...(this.lost ? { lost: this.lost } : {}),
+      },
+    });
   }
 
   // ---------------- Bố cục & hiển thị ----------------
@@ -405,7 +492,11 @@ export class GameScene extends Phaser.Scene {
     this.score += SCORE_PER_PAIR;
     this.timeLeft = Math.min(this.cfg.time, this.timeLeft + TIME_BONUS_PER_PAIR);
     this.refreshHud();
+    this.checkBoard();
+  }
 
+  /** Sau khi bàn đổi: dọn sạch thì qua màn, bế tắc thì tự đảo bàn (chờ hiệu ứng ăn cặp chạy xong). */
+  private checkBoard(): void {
     if (this.board.isCleared()) {
       this.time.delayedCall(450, () => this.winLevel());
     } else if (!this.board.hasMove()) {
@@ -451,7 +542,7 @@ export class GameScene extends Phaser.Scene {
     // Người chơi có thể đã tự bấm Đảo bàn trong lúc chờ
     if (this.ended || this.board.hasMove()) return;
     if (this.shuffles <= 0) {
-      this.loseLevel('Hết nước đi!', 'Không còn cặp nào nối được và đã hết lượt Đảo bàn.');
+      this.loseLevel('moves');
       return;
     }
     this.shuffleBoard(true);
@@ -513,7 +604,7 @@ export class GameScene extends Phaser.Scene {
     if (this.ended) return;
     this.timeLeft -= dt;
     this.drawTimeBar();
-    if (this.timeLeft <= 0) this.loseLevel('Hết giờ!');
+    if (this.timeLeft <= 0) this.loseLevel('time');
   }
 
   private winLevel(): void {
@@ -522,6 +613,15 @@ export class GameScene extends Phaser.Scene {
     const bonus = Math.ceil(this.timeLeft) * POINTS_PER_SECOND_LEFT;
     this.score += bonus;
     this.refreshHud();
+    const next: SavedGame = {
+      level: this.levelIndex + 1,
+      score: this.score,
+      hints: this.hints,
+      shuffles: this.shuffles,
+      retries: this.retries,
+    };
+    // Lưu ngay chỗ vào màn sau: app bị tắt lúc đang hiện hộp thoại này thì chơi tiếp từ màn sau
+    saveGame(next);
     this.openDialog({
       title: 'Qua màn!',
       body:
@@ -529,43 +629,65 @@ export class GameScene extends Phaser.Scene {
         `Gợi ý: ${this.hints} + ${HINTS_PER_LEVEL} = ${this.hints + HINTS_PER_LEVEL}\n` +
         `Đảo bàn: ${this.shuffles} + ${SHUFFLES_PER_LEVEL} = ${this.shuffles + SHUFFLES_PER_LEVEL}`,
       actions: [
-        {
-          label: 'Màn tiếp theo',
-          onClick: () =>
-            this.scene.restart({
-              level: this.levelIndex + 1,
-              score: this.score,
-              hints: this.hints,
-              shuffles: this.shuffles,
-            }),
-        },
-        { label: 'Về menu', onClick: () => this.scene.start('Menu') },
+        { label: 'Màn tiếp theo', onClick: () => this.scene.restart(next) },
+        { label: 'Lưu và về menu', onClick: () => this.scene.start('Menu') },
       ],
-      // Không có `back`: về menu là bỏ cả lượt chơi đang thắng, nên phải bấm chọn hẳn
+      // Không có `back`: bấm nhầm Back không rời màn, người chơi tự chọn một nút
     });
   }
 
-  /** Thua màn (hết giờ / hết nước đi) là kết thúc lượt chơi, nên ghi lên bảng xếp hạng. */
-  private loseLevel(title: string, reason?: string): void {
+  /**
+   * Thua màn (hết giờ / hết nước đi). Còn lượt chơi lại thì được chơi lại màn này với điểm và lượt trợ giúp
+   * như lúc mới vào màn (cả lượt chơi chỉ có RETRIES_PER_RUN lượt); hết lượt thì chỉ còn nút về menu.
+   * Lượt chơi chỉ được ghi lên bảng xếp hạng khi về menu từ đây (nút hoặc Back), xem finishRun.
+   * Trước đó trạng thái thua được lưu lại, nên app bị tắt lúc này thì chơi tiếp sẽ hiện lại hộp thoại này.
+   */
+  private loseLevel(why: LoseReason): void {
     if (this.ended) return;
     this.ended = true;
+    this.lost = why;
     this.select(null);
-    // Bỏ cuộc (rời màn từ menu tạm dừng, về menu sau khi qua màn) thì không ghi
-    const rank = addToLeaderboard(this.score, this.levelIndex + 1);
-    // Có kỷ lục mới thì gửi lên mạng (cũng gửi lại nếu lần trước gửi lỗi)
-    void syncBest();
+    this.saveProgress();
+    const { title, reason } = LOSE_TEXT[why];
+    const canRetry = this.retries > 0;
+    // Chưa ghi: đây là hạng lượt chơi sẽ có nếu về menu lúc này
+    const rank = rankFor(this.score, this.levelIndex + 1);
+    let body = (reason ? `${reason}\n` : '') + `Bạn đạt ${this.score} điểm`;
+    if (rank) body += canRetry ? `\nVề menu: xếp hạng ${rank}` : `\nHạng ${rank} trên bảng xếp hạng!`;
+    body += `\n${this.retriesText()}`;
+    const retry = { label: 'Chơi lại', onClick: () => this.retryLevel() };
     this.openDialog({
       title,
-      body:
-        (reason ? `${reason}\n` : '') +
-        `Bạn đạt ${this.score} điểm` +
-        (rank ? `\nHạng ${rank} trên bảng xếp hạng!` : ''),
-      actions: [
-        { label: 'Chơi lại', onClick: () => this.scene.restart({ level: this.levelIndex, score: 0 }) },
-        { label: 'Về menu', onClick: () => this.scene.start('Menu') },
-      ],
-      back: () => this.scene.start('Menu'),
+      body,
+      actions: [...(canRetry ? [retry] : []), { label: 'Về menu', onClick: () => this.finishRun() }],
+      back: () => this.finishRun(),
     });
+  }
+
+  /**
+   * Dùng một lượt chơi lại: chơi lại màn này với điểm và lượt trợ giúp như lúc mới vào màn.
+   * Cả hộp thoại thua lẫn menu tạm dừng đều đi qua đây, nên cả lượt chơi chỉ có RETRIES_PER_RUN lần.
+   */
+  private retryLevel(): void {
+    this.scene.restart({ ...this.entry, retries: this.retries - 1 });
+  }
+
+  private retriesText(): string {
+    return this.retries > 0 ? `Còn ${this.retries} lượt chơi lại` : 'Đã hết lượt chơi lại';
+  }
+
+  /**
+   * Kết thúc lượt chơi sau khi thua: ghi điểm cuối cùng lên bảng xếp hạng, xóa bản lưu rồi về menu.
+   * Đây là cách duy nhất một lượt chơi kết thúc và được ghi; "Lưu và về menu" giữ lượt chơi để chơi tiếp.
+   */
+  private finishRun(): void {
+    if (this.recorded) return;
+    this.recorded = true;
+    clearSavedGame();
+    addToLeaderboard(this.score, this.levelIndex + 1);
+    // Có kỷ lục mới thì gửi lên mạng (cũng gửi lại nếu lần trước gửi lỗi)
+    void syncBest();
+    this.scene.start('Menu');
   }
 
   /** Hộp thoại đang mở được ghi lại để dựng lại đúng vị trí khi xoay màn hình. */
@@ -591,14 +713,24 @@ export class GameScene extends Phaser.Scene {
   private pause(): void {
     if (this.ended || this.paused) return;
     this.setPaused(true);
+    // Tạm dừng cũng là lúc app xuống nền, có thể bị tắt hẳn ngay sau đó
+    this.saveProgress();
     this.openDialog({
       title: 'Tạm dừng',
+      body: this.retriesText(),
       shade: 0.92, // che gần kín bàn chơi để không xem trước nước đi khi đang dừng
       actions: [
         { label: 'Tiếp tục', onClick: () => this.resume() },
-        // Rời màn đang chơi dở là bỏ cuộc: không ghi lên bảng xếp hạng
-        { label: 'Chơi lại màn', onClick: () => this.scene.restart({ level: this.levelIndex, score: 0 }) },
-        { label: 'Về menu', onClick: () => this.scene.start('Menu') },
+        // Tốn một lượt chơi lại như khi thua; hết lượt thì không có nút này
+        ...(this.retries > 0 ? [{ label: 'Chơi lại màn', onClick: () => this.retryLevel() }] : []),
+        // Đã lưu lúc tạm dừng; lưu lại cho chắc rồi về menu, ở đó có nút Tiếp tục
+        {
+          label: 'Lưu và về menu',
+          onClick: () => {
+            this.saveProgress();
+            this.scene.start('Menu');
+          },
+        },
       ],
       back: () => this.resume(),
     });

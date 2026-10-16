@@ -1,6 +1,6 @@
 /**
  * Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi,
- * bản kỷ lục đã gửi lên mạng (xem online.ts) và bộ hình ô đang chọn.
+ * bản kỷ lục đã gửi lên mạng (xem online.ts), bộ hình ô đang chọn và lượt chơi đang lưu dở.
  * Không phụ thuộc Phaser. Mọi lỗi lưu trữ (trình duyệt chặn, chế độ ẩn danh...) đều được bỏ qua.
  */
 
@@ -8,6 +8,7 @@ const LEADERBOARD_KEY = 'pairfect-leaderboard';
 const PLAYER_NAME_KEY = 'pairfect-player-name';
 const SYNCED_BEST_KEY = 'pairfect-synced-best';
 const TILE_ART_KEY = 'pairfect-tile-art';
+const SAVED_GAME_KEY = 'pairfect-saved-game';
 
 /** Số lượt chơi giữ lại trên bảng xếp hạng. */
 export const LEADERBOARD_SIZE = 10;
@@ -82,8 +83,13 @@ export function loadBest(): number {
   return loadLeaderboard()[0]?.score ?? 0;
 }
 
+/** Thứ hạng một lượt chơi sẽ có nếu ghi vào bảng xếp hạng lúc này (từ 1, hoặc null nếu không lọt vào bảng). Không ghi gì. */
+export function rankFor(score: number, stage: number): number | null {
+  return insertEntry(loadLeaderboard(), { score, stage, date: Date.now() }).rank;
+}
+
 /**
- * Ghi một lượt chơi vừa thua vào bảng xếp hạng.
+ * Ghi một lượt chơi đã kết thúc vào bảng xếp hạng.
  * Trả về thứ hạng của lượt này (từ 1), hoặc null nếu điểm không đủ lọt vào bảng.
  */
 export function addToLeaderboard(score: number, stage: number): number | null {
@@ -154,4 +160,124 @@ export function loadTileArt(): string | null {
 
 export function saveTileArt(id: string): void {
   write(TILE_ART_KEY, id);
+}
+
+// ---------------- Lượt chơi đang lưu ----------------
+
+/** Lý do thua màn: hết giờ hoặc hết nước đi (bàn bế tắc mà hết lượt Đảo bàn). */
+export type LoseReason = 'time' | 'moves';
+
+/**
+ * Lượt chơi đang dở, để chơi tiếp từ menu (kể cả sau khi app bị tắt ngang). Các trường ngoài `play`
+ * là chỗ vào màn đang chơi: đó cũng là dữ liệu GameScene nhận khi vào màn, và là chỗ bắt đầu lại khi chơi lại màn sau khi thua.
+ */
+export interface SavedGame {
+  /** Màn đang chơi, đánh số từ 0. */
+  level: number;
+  /** Điểm lúc vào màn. */
+  score: number;
+  /** Lượt Gợi ý / Đảo bàn còn dư từ màn trước, chưa cộng lượt của màn này. */
+  hints: number;
+  shuffles: number;
+  /** Lượt chơi lại còn lại của cả lượt chơi. */
+  retries: number;
+  /** Màn đang chơi dở; không có thì vào màn từ đầu (như vừa qua màn trước). */
+  play?: SavedPlay;
+}
+
+/** Trạng thái giữa màn: đủ để dựng lại đúng bàn đang chơi. */
+export interface SavedPlay {
+  score: number;
+  /** Lượt Gợi ý / Đảo bàn còn lại (đã cộng lượt của màn này). */
+  hints: number;
+  shuffles: number;
+  /** Số giây còn lại. */
+  timeLeft: number;
+  /** Số cặp đã ăn trong màn, quyết định hướng dồn kế tiếp của kiểu Xoay vòng. */
+  matches: number;
+  /** Lưới có viền của Board (xem Board.load). */
+  grid: number[][];
+  /** Đã thua màn, đang chờ chọn chơi lại hay về menu. */
+  lost?: LoseReason;
+}
+
+const isCount = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0;
+
+function isSavedPlay(p: unknown): p is SavedPlay {
+  if (typeof p !== 'object' || p === null) return false;
+  const { score, hints, shuffles, timeLeft, matches, grid, lost } = p as Record<string, unknown>;
+  return (
+    [score, hints, shuffles, matches].every(isCount) &&
+    typeof timeLeft === 'number' &&
+    Number.isFinite(timeLeft) &&
+    Array.isArray(grid) &&
+    grid.every((row) => Array.isArray(row) && row.every((v) => Number.isInteger(v))) &&
+    (lost === undefined || lost === 'time' || lost === 'moves')
+  );
+}
+
+/**
+ * Lượt chơi đang lưu, hoặc null nếu không có (hay dữ liệu hỏng).
+ * Riêng phần màn chơi dở hỏng thì bỏ phần đó: vẫn chơi tiếp được, từ đầu màn đang chơi.
+ */
+export function loadSavedGame(): SavedGame | null {
+  const stored = readJson(SAVED_GAME_KEY);
+  if (typeof stored !== 'object' || stored === null) return null;
+  const s = (stored as Record<string, unknown>).game;
+  if (typeof s !== 'object' || s === null) return null;
+  const { level, score, hints, shuffles, retries, play } = s as Record<string, unknown>;
+  if (!isCount(level) || !isCount(score) || !isCount(hints) || !isCount(shuffles) || !isCount(retries)) return null;
+  return { level, score, hints, shuffles, retries, ...(isSavedPlay(play) ? { play } : {}) };
+}
+
+/**
+ * Nơi ghi thêm một bản sao của mỗi lần lưu (trên Android: bộ nhớ riêng của app, xem native.ts),
+ * phòng khi localStorage của WebView chưa kịp ghi xuống đĩa thì app đã bị tắt.
+ */
+let mirror: ((raw: string) => void) | null = null;
+
+export function setSavedGameMirror(fn: ((raw: string) => void) | null): void {
+  mirror = fn;
+}
+
+/**
+ * Ghi kèm thời điểm lưu để biết bản nào mới hơn (xem restoreSavedGame).
+ * `game` null là dấu "đã xóa": không xóa hẳn, để một bản sao cũ hơn không làm sống lại lượt chơi đã kết thúc.
+ */
+function writeSavedGame(game: SavedGame | null): void {
+  const raw = JSON.stringify({ savedAt: Date.now(), game });
+  write(SAVED_GAME_KEY, raw);
+  mirror?.(raw);
+}
+
+export function saveGame(game: SavedGame): void {
+  writeSavedGame(game);
+}
+
+/** Xóa lượt chơi đang lưu (lượt chơi đã kết thúc và được ghi lên bảng xếp hạng). */
+export function clearSavedGame(): void {
+  writeSavedGame(null);
+}
+
+/** Thời điểm lưu của một bản lưu dạng chuỗi; không có hoặc hỏng thì -Infinity (cũ nhất). */
+function savedAt(raw: string | null): number {
+  try {
+    const t = (JSON.parse(raw ?? 'null') as { savedAt?: unknown } | null)?.savedAt;
+    return typeof t === 'number' && Number.isFinite(t) ? t : -Infinity;
+  } catch {
+    return -Infinity;
+  }
+}
+
+/**
+ * Lúc mở app: so bản sao `copy` (đọc lại từ chỗ ghi bản sao) với bản trong localStorage và giữ bản mới hơn ở cả hai nơi.
+ * Trả về bản cần ghi lại vào chỗ bản sao, hoặc null nếu bản sao đã là bản mới nhất.
+ */
+export function restoreSavedGame(copy: string | null): string | null {
+  const local = read(SAVED_GAME_KEY);
+  if (savedAt(copy) > savedAt(local)) {
+    write(SAVED_GAME_KEY, copy!);
+    return null;
+  }
+  return savedAt(local) > savedAt(copy) ? local : null;
 }

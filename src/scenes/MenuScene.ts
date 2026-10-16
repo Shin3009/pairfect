@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { HARD_START } from '../game/levels';
-import { loadBest, loadPlayerName } from '../game/storage';
+import { loadBest, loadPlayerName, loadSavedGame, type SavedGame } from '../game/storage';
 import { createTileTextures, MAX_TYPES, TEXTURE_SIZE, tileKey } from '../game/tileArt';
 import { exitApp, onBack } from '../native';
 import { syncBest } from '../online';
@@ -56,9 +56,19 @@ export class MenuScene extends Phaser.Scene {
     this.add.text(x, 245, 'Tile Connect', textStyle(40, C.textAccent, 'bold')).setOrigin(0.5);
     this.add.text(x, 305, `Kỷ lục: ${loadBest()}`, textStyle(30, C.textDim)).setOrigin(0.5);
 
-    new Button(this, x, 420, 420, 96, 'Chơi', () => this.scene.start('Game', { level: 0, score: 0 }), 1, 40);
-    new Button(this, x, 530, 420, 80, 'Bảng xếp hạng', () => this.scene.start('Leaderboard'), 1, 32);
-    new Button(this, x, 630, 420, 80, 'Cách chơi', () => this.showHowToPlay(), 1, 32);
+    const saved = loadSavedGame();
+    if (saved) {
+      // Có lượt chơi đang lưu: thêm nút Tiếp tục lên đầu, bốn nút thấp hơn một chút cho vừa màn hình
+      const label = `Tiếp tục – Màn ${saved.level + 1}`;
+      new Button(this, x, 396, 420, 88, label, () => this.scene.start('Game', saved), 1, 34);
+      new Button(this, x, 490, 420, 72, 'Chơi mới', () => this.confirmNewGame(saved), 1, 30);
+      new Button(this, x, 576, 420, 72, 'Bảng xếp hạng', () => this.scene.start('Leaderboard'), 1, 30);
+      new Button(this, x, 662, 420, 72, 'Cách chơi', () => this.showHowToPlay(), 1, 30);
+    } else {
+      new Button(this, x, 420, 420, 96, 'Chơi', () => this.newGame(), 1, 40);
+      new Button(this, x, 530, 420, 80, 'Bảng xếp hạng', () => this.scene.start('Leaderboard'), 1, 32);
+      new Button(this, x, 630, 420, 80, 'Cách chơi', () => this.showHowToPlay(), 1, 32);
+    }
 
     this.drawPlayerChip();
     this.drawArtChip();
@@ -107,6 +117,25 @@ export class MenuScene extends Phaser.Scene {
     bg.fillStyle(C.panel, 1).fillRoundedRect(x, cy - CHIP_H / 2, w, CHIP_H, CHIP_H / 2);
     this.add.image(x + 6 + thumb / 2, cy, tileKey(1)).setDisplaySize(thumb, thumb);
     tapZone(this, x + w / 2, cy, w, CHIP_H, 1, () => this.scene.start('TileArt'));
+  }
+
+  /** Lượt chơi mới từ màn 1. Màn đầu tiên tự lưu đè lên lượt chơi đang lưu (nếu có). */
+  private newGame(): void {
+    this.scene.start('Game', { level: 0, score: 0 });
+  }
+
+  /** Chơi mới sẽ xóa lượt chơi đang lưu, nên hỏi lại để bấm nhầm không mất lượt chơi. */
+  private confirmNewGame(saved: SavedGame): void {
+    const score = saved.play?.score ?? saved.score;
+    this.openDialog({
+      title: 'Chơi mới?',
+      body: `Lượt chơi đang lưu (màn ${saved.level + 1}, ${score} điểm) sẽ bị xóa và không được ghi lên bảng xếp hạng.`,
+      actions: [
+        { label: 'Chơi mới', onClick: () => this.newGame() },
+        { label: 'Hủy', onClick: () => this.closeDialog() },
+      ],
+      back: () => this.closeDialog(),
+    });
   }
 
   private showHowToPlay(): void {

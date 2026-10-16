@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { bindAppEvents } from './native';
+import { bindAppEvents, initSaveBackup } from './native';
 import { initOnline, onSyncResult } from './online';
 import { GameScene } from './scenes/GameScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
@@ -7,6 +7,9 @@ import { MenuScene } from './scenes/MenuScene';
 import { TileArtScene } from './scenes/TileArtScene';
 import { sizeFor } from './scenes/ui';
 import { showToast } from './toast';
+
+// Android: lấy lại bản lưu lượt chơi mới nhất trước khi menu đọc nó (xem native.ts)
+await initSaveBackup();
 
 // Khung chứa game: cả màn hình trừ phần tai thỏ / camera đục lỗ (xem index.html)
 const parent = document.getElementById('game')!;
