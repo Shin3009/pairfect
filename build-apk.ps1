@@ -336,6 +336,22 @@ if ($newJava -ne $java) {
   Write-Ok 'Đã bật chế độ toàn màn hình trong MainActivity.java'
 }
 
+# Phiên bản app lấy theo "version" trong package.json (đổi bằng: npm version X.Y.Z --no-git-tag-version).
+# versionName là số hiện trong phần cài đặt của Android; versionCode là số nguyên phải tăng ở mỗi bản cập nhật
+# lên Google Play, tính bằng X*10000 + Y*100 + Z nên Y và Z phải dưới 100.
+$version = (Get-Content (Join-Path $Root 'package.json') -Raw | ConvertFrom-Json).version
+if (-not ($version -match '^(\d+)\.(\d{1,2})\.(\d{1,2})$')) {
+  Fail "Phiên bản '$version' trong package.json phải có dạng X.Y.Z, với Y và Z dưới 100."
+}
+$versionCode = [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3]
+$appGradle = Join-Path $androidDir 'app\build.gradle'
+$gradleText = [IO.File]::ReadAllText($appGradle)
+$newGradle = $gradleText -replace 'versionCode\s+\d+', "versionCode $versionCode" -replace 'versionName\s+"[^"]*"', "versionName `"$version`""
+if ($newGradle -ne $gradleText) {
+  [IO.File]::WriteAllText($appGradle, $newGradle, (New-Object Text.UTF8Encoding $false))
+  Write-Ok "Đã đặt phiên bản app $version (versionCode $versionCode) trong app\build.gradle"
+}
+
 # Ghi đường dẫn SDK vào local.properties để Gradle và Android Studio dùng đúng SDK
 $lpFile = Join-Path $androidDir 'local.properties'
 $lpLine = 'sdk.dir=' + $sdk.Replace('\', '\\').Replace(':', '\:')
@@ -427,7 +443,6 @@ if ($Release) {
 if (-not (Test-Path $apkSrc)) { Fail "Build xong nhưng không thấy file $apkSrc" }
 
 # ---------------------------------------------------------------- 5. Xuất file + cài đặt
-$version = (Get-Content (Join-Path $Root 'package.json') -Raw | ConvertFrom-Json).version
 $outDir = Join-Path $Root 'apk-output'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $apkOut = Join-Path $outDir "Pairfect-v$version-$mode.apk"

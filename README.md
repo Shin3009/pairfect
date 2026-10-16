@@ -33,7 +33,9 @@ build-apk.bat -Release         :: APK release đã ký để gửi người khá
 
 Script tự dò Android SDK theo thứ tự: biến `ANDROID_HOME`/`ANDROID_SDK_ROOT`, file `android\local.properties`, cấu hình của Android Studio (kể cả bản Preview/Canary), rồi các vị trí mặc định. Nếu vẫn không tìm thấy, lấy đường dẫn trong Android Studio (*Settings → Languages & Frameworks → Android SDK → Android SDK Location*) rồi chạy `build-apk.bat -SdkPath "<đường dẫn>"`. Tương tự, có thể chỉ định JDK bằng `-JdkPath "<thư mục cài Android Studio>\jbr"`.
 
-File APK nằm trong thư mục `apk-output\`. Script lo hết các bước: cài thư viện, build code, tạo project Android (lần đầu), khóa màn hình ngang, bật chế độ toàn màn hình, đồng bộ và build bằng Gradle. Lần build đầu tiên sẽ lâu vài phút vì Gradle phải tải thư viện.
+File APK nằm trong thư mục `apk-output\`. Script lo hết các bước: cài thư viện, build code, tạo project Android (lần đầu), khóa màn hình ngang, bật chế độ toàn màn hình, đặt số phiên bản, đồng bộ và build bằng Gradle. Lần build đầu tiên sẽ lâu vài phút vì Gradle phải tải thư viện.
+
+Số phiên bản của app lấy theo `version` trong `package.json`. Ra bản mới thì đổi bằng `npm version 0.1.2 --no-git-tag-version` (sửa cả `package.json` lẫn `package-lock.json`). Script ghi số này vào project Android: `versionName` là chính số đó (hiện trong phần cài đặt của Android), `versionCode` = X×10000 + Y×100 + Z (ví dụ 0.1.1 → 101), luôn tăng như Google Play yêu cầu.
 
 Với `-Release`, lần đầu script đề nghị tạo keystore tại `%USERPROFILE%\.android-keystores\pairfect-release.jks` (để ngoài project cho an toàn). Hãy sao lưu file này cùng mật khẩu: mất keystore là không thể phát hành bản cập nhật cho app nữa.
 
@@ -57,6 +59,7 @@ Trước khi phát hành, nên làm thêm:
 - Đổi `appId` trong `capacitor.config.ts` (ví dụ `com.tuan.pairfect`), làm trước khi chạy `cap add android`. Đây là ID vĩnh viễn trên Google Play.
 - Khóa màn hình ngang: trong `android/app/src/main/AndroidManifest.xml`, đặt `android:screenOrientation="userLandscape"` cho thẻ `<activity>` (xoay được giữa hai chiều ngang, theo nút khóa xoay của người dùng). `build-apk.bat` tự làm bước này.
 - Toàn màn hình: `SystemBars.hidden` trong `capacitor.config.ts` ẩn thanh trạng thái và thanh điều hướng lúc mở app, nhưng vuốt từ mép màn hình là chúng hiện lại luôn. `build-apk.bat` ghi thêm vào `MainActivity.java` để vuốt chỉ hiện tạm rồi tự ẩn (chế độ immersive). Build thủ công thì chép phần `MainActivity` trong `build-apk.ps1` sang.
+- Số phiên bản: đặt `versionName` và `versionCode` trong `android/app/build.gradle` khớp với `version` của `package.json` (xem ở trên). `build-apk.bat` tự làm bước này.
 - Thay icon và splash: dùng gói `@capacitor/assets` để sinh tự động từ một ảnh gốc.
 - Build bản phát hành: trong Android Studio chọn *Build → Generate Signed App Bundle / APK*. Google Play yêu cầu định dạng AAB.
 
