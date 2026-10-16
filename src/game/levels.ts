@@ -26,17 +26,20 @@ export interface LevelConfig {
 
 /**
  * Danh sách màn chơi. Sửa ở đây để cân bằng độ khó. Số ô (rows * cols) phải là số chẵn.
- * Bàn thấp và rộng, lớn dần tới tối đa 7 x 20 ở màn cuối. Thời gian khoảng 5 giây mỗi cặp,
+ * Bàn thấp và rộng, lớn dần tới tối đa 8 x 20 ở màn cuối. Mỗi bàn có khoảng 2,4 cột cho mỗi hàng:
+ * với ô cao (xem MAX_TILE_ASPECT trong GameScene) bàn lấp trên 90% màn hình máy tính bảng 5:3
+ * (Galaxy Tab A11) mà điện thoại 20:9 vẫn lấp được 78–91%.
+ * Màn 1–5 có types = số cặp / 2 nên loại nào cũng đủ 4 ô. Thời gian khoảng 5 giây mỗi cặp,
  * giảm dần theo màn.
  */
 export const LEVELS: LevelConfig[] = [
-  { rows: 4, cols: 12, types: 12, gravity: 'none', time: 180 },
+  { rows: 4, cols: 11, types: 11, gravity: 'none', time: 170 },
   { rows: 5, cols: 12, types: 15, gravity: 'down', time: 200 },
-  { rows: 5, cols: 16, types: 20, gravity: 'left', time: 240 },
+  { rows: 6, cols: 14, types: 21, gravity: 'left', time: 250 },
   { rows: 6, cols: 16, types: 24, gravity: 'up', time: 270 },
-  { rows: 6, cols: 18, types: 27, gravity: 'right', time: 290 },
+  { rows: 7, cols: 16, types: 28, gravity: 'right', time: 300 },
   { rows: 7, cols: 18, types: 34, gravity: 'center-h', time: 330 },
-  { rows: 7, cols: 20, types: 40, gravity: 'center-v', time: 360 },
+  { rows: 8, cols: 20, types: 40, gravity: 'center-v', time: 400 },
 ];
 
 export const GRAVITY_LABEL: Record<GravityMode, string> = {
@@ -57,10 +60,10 @@ export const GRAVITY_LABEL: Record<GravityMode, string> = {
 
 /**
  * Vòng lặp sau màn cuối: mỗi vòng bớt LOOP_TIME_STEP giây, không dưới LOOP_MIN_TIME giây.
- * Mức sàn 140 giây cho bàn 70 cặp: cộng cả thưởng 1 giây mỗi cặp là khoảng 3 giây mỗi cặp.
+ * Mức sàn 160 giây cho bàn 80 cặp: cộng cả thưởng 1 giây mỗi cặp là khoảng 3 giây mỗi cặp.
  */
 export const LOOP_TIME_STEP = 40;
-export const LOOP_MIN_TIME = 140;
+export const LOOP_MIN_TIME = 160;
 
 /**
  * Giai đoạn khó: bắt đầu từ vòng đầu tiên mà thời gian đã chạm mức sàn (màn 43 với số liệu hiện tại),

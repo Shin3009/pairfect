@@ -91,7 +91,7 @@ Cài đặt (làm một lần):
 
 - Ai cũng đọc được (để làm bảng xếp hạng chung).
 - Chỉ chính người chơi ghi được document của mình, kỷ lục chỉ được tăng, không ai xóa được.
-- Dữ liệu phải đúng định dạng, và điểm không được vượt mức có thể đạt tới màn đó: thua ở màn n thì tối đa n × 1500 điểm (`MAX_SCORE_PER_STAGE` trong `src/game/scoring.ts`; `npm test` kiểm tra mọi màn đều nằm dưới mức này và `firestore.rules` dùng đúng số này).
+- Dữ liệu phải đúng định dạng, và điểm không được vượt mức có thể đạt tới màn đó: thua ở màn n thì tối đa n × 1700 điểm (`MAX_SCORE_PER_STAGE` trong `src/game/scoring.ts`; `npm test` kiểm tra mọi màn đều nằm dưới mức này và `firestore.rules` dùng đúng số này).
 
 Vẫn có thể bị gửi điểm giả nằm dưới mức đó, bằng cách gọi thẳng Firebase thay vì chơi. Muốn chặn hẳn thì cần Firebase App Check với Play Integrity (xem Gợi ý phát triển tiếp).
 
@@ -136,7 +136,7 @@ Bảng xếp hạng chỉ lưu trên máy (localStorage), giữ 10 lượt chơi
 
 ### Chỉ chơi màn ngang
 
-Game chỉ chơi màn ngang (hướng tới tablet). Kích thước logic cao 720 và rộng theo tỉ lệ màn hình (1100–1600) để lấp kín chiều ngang; thanh HUD gọn một hàng ở trên để bàn chơi có nhiều chiều cao nhất. Bàn của các màn thấp và rộng, lớn dần tới tối đa 7x20. Trên màn hình không quá dài (máy tính bảng 5:3 hay 16:10, như Galaxy Tab A11 1340x800), ô được kéo cao hơn rộng, tối đa 1,25 lần (`MAX_TILE_ASPECT` trong `GameScene.ts`), để bàn lấp chỗ trống phía trên và dưới; hình trên ô vẫn giữ vuông. App Android khóa hướng ngang; trên trình duyệt đang dọc, `index.html` hiện lời nhắc xoay ngang thiết bị. Khi chạy `npm run dev`, cửa sổ trình duyệt cần rộng hơn cao.
+Game chỉ chơi màn ngang (hướng tới tablet). Kích thước logic cao 720 và rộng theo tỉ lệ màn hình (1100–1600) để lấp kín chiều ngang; thanh HUD gọn một hàng ở trên để bàn chơi có nhiều chiều cao nhất. Bàn của các màn thấp và rộng (khoảng 2,4 cột mỗi hàng), lớn dần tới tối đa 8x20. Trên màn hình không quá dài (máy tính bảng 5:3 hay 16:10, như Galaxy Tab A11 1340x800), ô được kéo cao hơn rộng, tối đa 1,25 lần (`MAX_TILE_ASPECT` trong `GameScene.ts`), để bàn lấp chỗ trống phía trên và dưới; hình trên ô vẫn giữ vuông. App Android khóa hướng ngang; trên trình duyệt đang dọc, `index.html` hiện lời nhắc xoay ngang thiết bị. Khi chạy `npm run dev`, cửa sổ trình duyệt cần rộng hơn cao.
 
 Bản hỗ trợ cả màn dọc lẫn màn ngang vẫn còn trong lịch sử git (commit `d66039d` trên nhánh `master`).
 

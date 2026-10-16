@@ -30,17 +30,21 @@ function autoPlay(lv: LevelConfig): Board {
 }
 
 describe('LEVELS', () => {
-  it('bàn có số ô chẵn, rộng hơn cao (game chỉ chơi màn ngang), tối đa 7 x 20', () => {
+  it('bàn có số ô chẵn, rộng hơn cao (game chỉ chơi màn ngang), tối đa 8 x 20', () => {
     for (const lv of LEVELS) {
       expect((lv.rows * lv.cols) % 2).toBe(0);
       expect(lv.cols).toBeGreaterThan(lv.rows);
-      expect(lv.rows).toBeLessThanOrEqual(7);
+      expect(lv.rows).toBeLessThanOrEqual(8);
       expect(lv.cols).toBeLessThanOrEqual(20);
     }
   });
 
   it('số loại không vượt quá 40 (số hình vẽ sẵn có)', () => {
     for (const lv of LEVELS) expect(lv.types).toBeLessThanOrEqual(40);
+  });
+
+  it('màn 1–5: loại nào cũng đủ 4 ô (types = số cặp / 2)', () => {
+    for (const lv of LEVELS.slice(0, 5)) expect(lv.types * 4).toBe(lv.rows * lv.cols);
   });
 
   it('chơi tự động tới hết bàn của mọi màn, một vòng lặp và hai vòng của giai đoạn khó', () => {

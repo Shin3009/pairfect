@@ -27,8 +27,8 @@ service cloud.firestore {
       // Game giới hạn tên 20 ký tự; ở đây nới rộng hơn cho chắc
       && d.name is string && d.name.size() > 0 && d.name.size() <= 40
       && d.stage is int && d.stage >= 1
-      // Thua ở màn n thì điểm không thể vượt n * 1500 (MAX_SCORE_PER_STAGE trong src/game/scoring.ts)
-      && d.score is int && d.score > 0 && d.score <= d.stage * 1500
+      // Thua ở màn n thì điểm không thể vượt n * 1700 (MAX_SCORE_PER_STAGE trong src/game/scoring.ts)
+      && d.score is int && d.score > 0 && d.score <= d.stage * 1700
       && d.updatedAt == request.time;
   }
 }

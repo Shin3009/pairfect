@@ -1,6 +1,6 @@
 # Các màn chơi và vòng lặp vô tận
 
-Pairfect có **7 màn được thiết kế sẵn**, bàn lớn dần tới tối đa 7 × 20. Sau màn 7, game tiếp tục vô tận trên bàn khó nhất (7 × 20, 40 loại): kiểu dồn ô lần lượt lặp lại theo thứ tự 7 màn, và mỗi vòng ít thời gian hơn cho tới mức sàn 140 giây (2:20). Từ màn 43, khi thời gian không giảm được nữa, game chuyển sang **giai đoạn khó** với các kiểu dồn mới và đá chắn đường.
+Pairfect có **7 màn được thiết kế sẵn**, bàn lớn dần tới tối đa 8 × 20. Sau màn 7, game tiếp tục vô tận trên bàn khó nhất (8 × 20, 40 loại): kiểu dồn ô lần lượt lặp lại theo thứ tự 7 màn, và mỗi vòng ít thời gian hơn cho tới mức sàn 160 giây (2:40). Từ màn 43, khi thời gian không giảm được nữa, game chuyển sang **giai đoạn khó** với các kiểu dồn mới và đá chắn đường.
 
 Toàn bộ dữ liệu màn chơi nằm trong `LEVELS` ở [`src/game/levels.ts`](../src/game/levels.ts); vòng lặp nằm trong hàm `getLevel()` cùng file. Tài nguyên của mỗi màn (gợi ý, đảo bàn, cách tính điểm) là các hằng số đầu file [`src/scenes/GameScene.ts`](../src/scenes/GameScene.ts).
 
@@ -20,22 +20,22 @@ Toàn bộ dữ liệu màn chơi nằm trong `LEVELS` ở [`src/game/levels.ts`
 - **Tự động đảo bàn tốn lượt.** Khi không còn cặp nào nối được, bàn tự xáo lại và **trừ 1 lượt Đảo bàn** của người chơi, kèm thông báo "Hết nước đi – tự dùng 1 lượt Đảo bàn". Nếu đã hết lượt Đảo bàn thì **thua màn** ngay ("Hết nước đi!"), giống như hết giờ.
 - **Cách chia loại hình.** Các cặp được chia lần lượt cho từng loại: loại 1, loại 2, … tới số loại của màn, rồi quay lại loại 1.
   - Khi số cặp đúng bằng hai lần số loại, mỗi loại có **4 ô**: 2 cặp, ghép kiểu nào cũng được.
-  - Khi số loại nhiều hơn thế, các loại dư chỉ có **2 ô**, nên mỗi ô đó chỉ có đúng một ô để ghép. Đây là điều khiến màn 6 và 7 khó hơn.
+  - Khi số loại nhiều hơn thế, các loại dư chỉ có **2 ô**, nên mỗi ô đó chỉ có đúng một ô để ghép. Đây là điều khiến màn 6 và các màn có đá (giai đoạn khó) khó hơn.
 - **Hình trên ô.** Có 40 loại hình; màn 7 dùng đủ cả 40. Người chơi chọn bộ hình ở menu (thẻ "Hình ô"): mặc định là trái cây và con vật (emoji của máy), ngoài ra có hình khối, quái vật (vẽ riêng cho game), quái vật Tuxemon (pixel art) và các bộ ảnh thêm vào `src/assets/tiles`. Ở bộ mặc định, thứ tự các hình được chọn để màn đầu chỉ có những hình khác nhau rõ nhất; màn sau mới thêm dần những hình cùng tông màu (ví dụ mèo, hổ và sư tử), nên càng về sau càng phải nhìn kỹ hơn.
 
 ## Tổng quan các màn
 
 | Màn | Tên (trong game) | Bàn | Số ô (số cặp) | Số loại | Số ô mỗi loại | Thời gian gốc | Thời gian gốc mỗi cặp |
 |---|---|---|---|---|---|---|---|
-| 1 | Cổ điển | 4 × 12 | 48 (24) | 12 | 4 ô | 3:00 | 7,5 giây |
+| 1 | Cổ điển | 4 × 11 | 44 (22) | 11 | 4 ô | 2:50 | 7,7 giây |
 | 2 | Dồn xuống | 5 × 12 | 60 (30) | 15 | 4 ô | 3:20 | 6,7 giây |
-| 3 | Dồn trái | 5 × 16 | 80 (40) | 20 | 4 ô | 4:00 | 6,0 giây |
+| 3 | Dồn trái | 6 × 14 | 84 (42) | 21 | 4 ô | 4:10 | 6,0 giây |
 | 4 | Dồn lên | 6 × 16 | 96 (48) | 24 | 4 ô | 4:30 | 5,6 giây |
-| 5 | Dồn phải | 6 × 18 | 108 (54) | 27 | 4 ô | 4:50 | 5,4 giây |
+| 5 | Dồn phải | 7 × 16 | 112 (56) | 28 | 4 ô | 5:00 | 5,4 giây |
 | 6 | Dồn vào giữa (ngang) | 7 × 18 | 126 (63) | 34 | loại 1–29: 4 ô, loại 30–34: 2 ô | 5:30 | 5,2 giây |
-| 7 | Dồn vào giữa (dọc) | 7 × 20 | 140 (70) | 40 | loại 1–30: 4 ô, loại 31–40: 2 ô | 6:00 | 5,1 giây |
+| 7 | Dồn vào giữa (dọc) | 8 × 20 | 160 (80) | 40 | 4 ô | 6:40 | 5,0 giây |
 
-Kích thước bàn ghi theo hàng × cột. Bàn thấp và rộng vì game chỉ chơi màn ngang; lớn nhất là 7 × 20.
+Kích thước bàn ghi theo hàng × cột. Bàn thấp và rộng vì game chỉ chơi màn ngang; lớn nhất là 8 × 20. Mỗi bàn có khoảng 2,4 cột cho mỗi hàng: với ô cao kiểu quân mạt chược, bàn lấp trên 90% màn hình máy tính bảng 5:3 (như Galaxy Tab A11, 1340 × 800), còn trên điện thoại 20:9 ô giữ vuông và bàn lấp khoảng 78–91%.
 
 ## Các kiểu dồn ô
 
@@ -56,33 +56,33 @@ Kiểu dồn làm bàn thay đổi sau mỗi lần ăn cặp. Đường nối b�
 ## Từng màn
 
 ### Màn 1 – Cổ điển
-Màn làm quen: bàn 4 × 12, 12 loại, không dồn ô, 3 phút. Chỉ có 4 hàng nên mọi ô đều nằm ở mép ngoài hoặc cách mép một ô. Đường vòng ra ngoài bàn thường có sẵn, và không ô nào di chuyển, nên bạn thoải mái tính trước.
+Màn làm quen: bàn 4 × 11, 11 loại, không dồn ô, 2 phút 50 giây. Chỉ có 4 hàng nên mọi ô đều nằm ở mép ngoài hoặc cách mép một ô. Đường vòng ra ngoài bàn thường có sẵn, và không ô nào di chuyển, nên bạn thoải mái tính trước.
 
 ### Màn 2 – Dồn xuống
 Màn đầu tiên có dồn ô. Bàn lớn lên 5 × 12 với 15 loại. Sau mỗi lần ăn cặp, phần cột phía trên ô bị xóa rơi xuống, nên phía trên bàn trống ra trước. Những cặp đang bị chặn thường nối được qua khoảng trống phía trên.
 
 ### Màn 3 – Dồn trái
-Bàn lớn hơn hẳn: 5 × 16 (80 ô) với 20 loại. Các ô trượt sang trái theo hàng, nên bên phải trống ra trước còn bên trái vẫn dày đặc. Có 4 phút, nhưng chỉ còn 6 giây cho mỗi cặp.
+Bàn lớn hơn hẳn: 6 × 14 (84 ô) với 21 loại. Các ô trượt sang trái theo hàng, nên bên phải trống ra trước còn bên trái vẫn dày đặc. Có 4 phút 10 giây, nhưng chỉ còn khoảng 6 giây cho mỗi cặp.
 
 ### Màn 4 – Dồn lên
 Bàn 6 × 16 (96 ô) với 24 loại. Các ô dồn lên trên, ngược với màn 2. Thời gian 4:30, khoảng 5,6 giây mỗi cặp.
 
 ### Màn 5 – Dồn phải
-Bàn rộng thêm thành 6 × 18 (108 ô) với 27 loại, mỗi loại vẫn đủ 4 ô. Các ô trượt sang phải, nên bên trái trống ra trước.
+Bàn cao thêm một hàng thành 7 × 16 (112 ô) với 28 loại, mỗi loại vẫn đủ 4 ô. Các ô trượt sang phải, nên bên trái trống ra trước.
 
 ### Màn 6 – Dồn vào giữa (ngang)
-Bàn cao thêm một hàng: 7 × 18 (126 ô) với 34 loại, trong đó 5 loại (30–34) chỉ có một cặp. Các ô dồn về đường thẳng đứng ở giữa bàn, nên mép trái và mép phải trống dần còn phần giữa luôn chật. Nên tìm trước những cặp chỉ có đúng một ô để ghép.
+Bàn rộng thêm: 7 × 18 (126 ô) với 34 loại, trong đó 5 loại (30–34) chỉ có một cặp. Các ô dồn về đường thẳng đứng ở giữa bàn, nên mép trái và mép phải trống dần còn phần giữa luôn chật. Nên tìm trước những cặp chỉ có đúng một ô để ghép.
 
 ### Màn 7 – Dồn vào giữa (dọc)
-Màn khó nhất trong các màn thiết kế sẵn: bàn lớn nhất 7 × 20 (140 ô), dùng đủ 40 loại hình, 10 loại (31–40) chỉ có một cặp, và ít thời gian cho mỗi cặp nhất. Các ô dồn về đường nằm ngang ở giữa bàn, nên hàng trên cùng và hàng dưới cùng trống ra trước còn các hàng giữa vẫn dày đặc.
+Màn khó nhất trong các màn thiết kế sẵn: bàn lớn nhất 8 × 20 (160 ô, 80 cặp), dùng đủ 40 loại hình (mỗi loại 4 ô) và ít thời gian cho mỗi cặp nhất. Các ô dồn về đường nằm ngang ở giữa bàn, nên hàng trên cùng và hàng dưới cùng trống ra trước còn các hàng giữa vẫn dày đặc.
 
 ## Vòng lặp vô tận
 
 Sau màn 7, game tiếp tục vô tận với màn 8, 9, … (HUD vẫn đếm tăng dần: "Màn 8", "Màn 9", …). Từ màn 8 trở đi:
 
-- **Bàn và số loại giữ như màn 7:** bàn 7 × 20 (140 ô) với 40 loại, trong đó loại 1–30 có 4 ô, loại 31–40 chỉ có 2 ô.
+- **Bàn và số loại giữ như màn 7:** bàn 8 × 20 (160 ô) với 40 loại, mỗi loại 4 ô.
 - **Kiểu dồn lặp lại theo thứ tự 7 màn:** màn 8 Cổ điển, màn 9 Dồn xuống, màn 10 Dồn trái, màn 11 Dồn lên, màn 12 Dồn phải, màn 13 Dồn vào giữa (ngang), màn 14 Dồn vào giữa (dọc), màn 15 lại Cổ điển, … (cho tới màn 42; từ màn 43 xem giai đoạn khó).
-- **Thời gian tính từ màn 7 (360 giây)**, giảm 40 giây mỗi vòng 7 màn, thấp nhất 140 giây. Mọi màn trong cùng một vòng có cùng thời gian.
+- **Thời gian tính từ màn 7 (400 giây)**, giảm 40 giây mỗi vòng 7 màn, thấp nhất 160 giây. Mọi màn trong cùng một vòng có cùng thời gian.
 
 Cách `getLevel()` tính màn số *N* (từ 8 trở đi):
 
@@ -90,28 +90,28 @@ Cách `getLevel()` tính màn số *N* (từ 8 trở đi):
 index           = N - 1
 kiểu dồn        = LEVELS[index % 7].gravity
 số vòng đã qua  = floor(index / 7)     // 1 ở vòng 2 (màn 8–14), 2 ở vòng 3 (màn 15–21), ...
-thời gian       = max(140, 360 - 40 × số vòng đã qua)
+thời gian       = max(160, 400 - 40 × số vòng đã qua)
 ```
 
 ### Thời gian mỗi vòng
 
 | Vòng | Màn | Thời gian mỗi màn | Thời gian mỗi cặp (chưa tính thưởng) |
 |---|---|---|---|
-| 1 | 1–7 | theo từng màn (xem bảng tổng quan) | 7,5 → 5,1 giây |
-| 2 | 8–14 | 320 giây (5:20) | 4,6 giây |
-| 3 | 15–21 | 280 giây (4:40) | 4,0 giây |
-| 4 | 22–28 | 240 giây (4:00) | 3,4 giây |
-| 5 | 29–35 | 200 giây (3:20) | 2,9 giây |
-| 6 | 36–42 | 160 giây (2:40) | 2,3 giây |
-| 7 trở đi | từ 43 | 140 giây (2:20) | khoảng 2,1 giây (bàn có đá nên ít cặp hơn) |
+| 1 | 1–7 | theo từng màn (xem bảng tổng quan) | 7,7 → 5,0 giây |
+| 2 | 8–14 | 360 giây (6:00) | 4,5 giây |
+| 3 | 15–21 | 320 giây (5:20) | 4,0 giây |
+| 4 | 22–28 | 280 giây (4:40) | 3,5 giây |
+| 5 | 29–35 | 240 giây (4:00) | 3,0 giây |
+| 6 | 36–42 | 200 giây (3:20) | 2,5 giây |
+| 7 trở đi | từ 43 | 160 giây (2:40) | khoảng 2,1 giây (bàn có đá nên ít cặp hơn) |
 
 - Màn 8 nối tiếp màn 7 mà không có bước nhảy độ khó: cùng bàn, cùng số loại, chỉ ít hơn 40 giây và đổi kiểu dồn.
-- Từ **màn 43 trở đi**, mọi màn đều 140 giây. Độ khó tiếp tục tăng nhờ giai đoạn khó (xem phần dưới).
-- Vẫn được +1 giây mỗi cặp, miễn là đồng hồ còn dưới mức ban đầu. Ở mức sàn 140 giây, ăn cặp đều tay ngay từ đầu cho tổng cộng tối đa khoảng 140 giây cộng số cặp (ví dụ 140 + 68 = 208 giây), tức khoảng 3 giây mỗi cặp.
+- Từ **màn 43 trở đi**, mọi màn đều 160 giây. Độ khó tiếp tục tăng nhờ giai đoạn khó (xem phần dưới).
+- Vẫn được +1 giây mỗi cặp, miễn là đồng hồ còn dưới mức ban đầu. Ở mức sàn 160 giây, ăn cặp đều tay ngay từ đầu cho tổng cộng tối đa khoảng 160 giây cộng số cặp (ví dụ 160 + 78 = 238 giây), tức khoảng 3 giây mỗi cặp.
 
 ## Giai đoạn khó (từ màn 43)
 
-Từ màn 43, thời gian đã chạm mức sàn 140 giây nên không giảm được nữa. Độ khó tiếp tục tăng bằng hai thứ mới: **kiểu dồn mới** và **đá chắn đường**. Bàn vẫn 7 × 20 với 40 loại.
+Từ màn 43, thời gian đã chạm mức sàn 160 giây nên không giảm được nữa. Độ khó tiếp tục tăng bằng hai thứ mới: **kiểu dồn mới** và **đá chắn đường**. Bàn vẫn 8 × 20 với 40 loại.
 
 ### Kiểu dồn mới
 
@@ -134,7 +134,7 @@ Kiểu dồn hai hướng làm các ô di chuyển nhiều hơn sau mỗi lần 
 - Đá là khối xám có vết nứt. Không chọn được, không xóa được và không bao giờ di chuyển.
 - Đá chặn đường nối giống như một ô hình. Khi dồn, các ô dừng lại sát đá như dừng ở mép bàn.
 - Hai viên đá không bao giờ kề nhau (kể cả chéo), nên không ô nào bị đá vây kín bốn phía.
-- Số đá tăng dần: 4 viên ở màn 43–49, mỗi vòng 7 màn thêm 2 viên, tối đa 10 viên từ màn 64. Đá chiếm chỗ nên bàn còn 136, 134, 132 rồi 130 ô hình. Vì vẫn 40 loại, số loại chỉ có một cặp tăng từ 12 lên 15.
+- Số đá tăng dần: 4 viên ở màn 43–49, mỗi vòng 7 màn thêm 2 viên, tối đa 10 viên từ màn 64. Đá chiếm chỗ nên bàn còn 156, 154, 152 rồi 150 ô hình. Vì vẫn 40 loại, một số loại chỉ còn một cặp: từ 2 loại (4 viên đá) tăng lên 5 loại (10 viên đá).
 - **Đá vỡ:** đá có thể làm bàn bế tắc mà đảo bàn cũng không gỡ được (thường khi chỉ còn vài ô). Khi đó từng viên đá ngẫu nhiên vỡ cho tới khi có nước đi, kèm thông báo "Hết nước đi – đá vỡ để mở đường". Nhờ vậy bàn có đá luôn chơi hết được.
 
 ## Tiến độ và chơi lại
@@ -149,10 +149,11 @@ Kiểu dồn hai hướng làm các ô di chuyển nhiều hơn sau mỗi lần 
 - Sửa mảng `LEVELS` trong `src/game/levels.ts`. Mỗi màn có `rows`, `cols`, `types`, `gravity`, `time` và tùy chọn `stones`.
 - Điều kiện mỗi màn phải thỏa:
   - `rows × cols` phải là số chẵn.
-  - Bàn nên rộng hơn cao (`cols > rows`), tối đa 7 × 20 để ô không quá nhỏ trên tablet.
+  - Bàn nên rộng hơn cao (`cols > rows`), tối đa 8 × 20 để ô không quá nhỏ trên tablet 4:3.
+  - Nên có khoảng 2,4 cột cho mỗi hàng (ví dụ 4 × 11, 6 × 14, 8 × 20): ô được kéo cao tới 1,25 lần (`MAX_TILE_ASPECT` trong `src/scenes/GameScene.ts`), nên bàn tỉ lệ đó lấp trên 90% màn hình tablet 5:3. Bàn dẹt hơn (như 7 × 20) để trống nhiều phía trên và dưới.
   - `types` tối đa là 40.
   - Để mọi loại đều có 4 ô, đặt `types = rows × cols / 4`. Số loại vượt quá con số đó sẽ thành loại chỉ có một cặp.
 - `npm test` kiểm tra các điều kiện này, kiểm tra quy tắc vòng lặp và giai đoạn khó, và tự chơi hết mọi màn, một vòng lặp cùng hai vòng của giai đoạn khó (`src/game/levels.test.ts`).
-- Vòng lặp luôn lấy bàn, số loại và thời gian của **màn cuối cùng** trong `LEVELS`; thêm hay đổi màn cuối sẽ đổi luôn vòng lặp. Mức giảm mỗi vòng và mức sàn là hai hằng số `LOOP_TIME_STEP` (40 giây) và `LOOP_MIN_TIME` (140 giây) trong `src/game/levels.ts`.
+- Vòng lặp luôn lấy bàn, số loại và thời gian của **màn cuối cùng** trong `LEVELS`; thêm hay đổi màn cuối sẽ đổi luôn vòng lặp. Mức giảm mỗi vòng và mức sàn là hai hằng số `LOOP_TIME_STEP` (40 giây) và `LOOP_MIN_TIME` (160 giây) trong `src/game/levels.ts`.
 - Giai đoạn khó chỉnh trong `src/game/levels.ts`: thứ tự kiểu dồn `HARD_GRAVITIES`, số đá `HARD_STONES_START` / `HARD_STONES_STEP` / `HARD_STONES_MAX`. Màn bắt đầu (`HARD_START`) được tính tự động là vòng đầu tiên có thời gian chạm mức sàn, nên đổi thời gian màn cuối, mức giảm hay mức sàn có thể làm màn bắt đầu thay đổi. Một màn bất kỳ trong `LEVELS` cũng có thể có đá qua trường `stones` (số chẵn).
 - Để đổi số lượt gợi ý, số lượt đảo bàn cộng thêm mỗi màn (`HINTS_PER_LEVEL`, `SHUFFLES_PER_LEVEL`), điểm mỗi cặp hoặc thời gian thưởng, sửa các hằng số đầu file `src/scenes/GameScene.ts`.
