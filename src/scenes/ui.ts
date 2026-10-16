@@ -177,6 +177,8 @@ export interface DialogOptions {
   shade?: number;
   /** Chiều rộng khung hộp thoại. */
   width?: number;
+  /** Căn lề nội dung; mặc định giữa. Danh sách dài (như ghi công) đọc dễ hơn khi căn trái. */
+  bodyAlign?: 'left' | 'center';
   depth?: number;
 }
 
@@ -205,13 +207,13 @@ export function showDialog(scene: Phaser.Scene, opts: DialogOptions): () => void
     .setDepth(depth + 2);
   const body = opts.body
     ? scene.add
-        .text(W / 2, 0, opts.body, {
+        .text(opts.bodyAlign === 'left' ? (W - PANEL_W) / 2 + PAD : W / 2, 0, opts.body, {
           ...textStyle(30, '#2c5266'),
-          align: 'center',
+          align: opts.bodyAlign ?? 'center',
           lineSpacing: 8,
           wordWrap: { width: PANEL_W - PAD * 2 },
         })
-        .setOrigin(0.5, 0)
+        .setOrigin(opts.bodyAlign === 'left' ? 0 : 0.5, 0)
         .setDepth(depth + 2)
     : null;
 
@@ -220,7 +222,7 @@ export function showDialog(scene: Phaser.Scene, opts: DialogOptions): () => void
   const contentHeight = () => title.height + (body ? 24 + body.height : 0);
   const panelHeight = () => PAD + contentHeight() + 44 + buttonsH + PAD;
   // Nội dung dài trên màn ngang (thấp): thu nhỏ chữ cho tới khi vừa màn hình
-  for (let size = 30; body && panelHeight() > H - 48 && size > 18; ) body.setFontSize((size -= 2));
+  for (let size = 30; body && panelHeight() > H - 48 && size > 14; ) body.setFontSize((size -= 2));
   const contentH = contentHeight();
   const panelH = panelHeight();
   const top = Math.round((H - panelH) / 2);

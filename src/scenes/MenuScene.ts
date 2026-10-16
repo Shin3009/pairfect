@@ -61,6 +61,7 @@ export class MenuScene extends Phaser.Scene {
     new Button(this, x, 630, 420, 80, 'Cách chơi', () => this.showHowToPlay(), 1, 32);
 
     this.drawPlayerChip();
+    this.drawArtChip();
     // Lần đầu mở game: hỏi tên người chơi để ghi kèm kỷ lục
     if (!loadPlayerName()) this.askName();
   }
@@ -92,6 +93,20 @@ export class MenuScene extends Phaser.Scene {
     bg.fillStyle(C.panel, 1).fillRoundedRect(x, cy - CHIP_H / 2, w, CHIP_H, CHIP_H / 2);
     const zone = tapZone(this, x + w / 2, cy, w, CHIP_H, 1, () => this.askName());
     this.chip = [bg, name, icon, zone];
+  }
+
+  /** Thẻ chọn bộ hình ô ở góc trên bên phải, đối xứng với thẻ tên: một ô của bộ đang dùng kèm chữ "Hình ô". */
+  private drawArtChip(): void {
+    const right = this.scale.width - 24;
+    const cy = 24 + CHIP_H / 2;
+    const thumb = CHIP_H - 8;
+    const bg = this.add.graphics();
+    const label = this.add.text(right - 22, cy, 'Hình ô', textStyle(24, C.text, 'bold')).setOrigin(1, 0.5);
+    const x = label.x - label.width - 12 - thumb - 6;
+    const w = right - x;
+    bg.fillStyle(C.panel, 1).fillRoundedRect(x, cy - CHIP_H / 2, w, CHIP_H, CHIP_H / 2);
+    this.add.image(x + 6 + thumb / 2, cy, tileKey(1)).setDisplaySize(thumb, thumb);
+    tapZone(this, x + w / 2, cy, w, CHIP_H, 1, () => this.scene.start('TileArt'));
   }
 
   private showHowToPlay(): void {

@@ -1,12 +1,13 @@
 /**
- * Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi
- * và bản kỷ lục đã gửi lên mạng (xem online.ts).
+ * Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi,
+ * bản kỷ lục đã gửi lên mạng (xem online.ts) và bộ hình ô đang chọn.
  * Không phụ thuộc Phaser. Mọi lỗi lưu trữ (trình duyệt chặn, chế độ ẩn danh...) đều được bỏ qua.
  */
 
 const LEADERBOARD_KEY = 'pairfect-leaderboard';
 const PLAYER_NAME_KEY = 'pairfect-player-name';
 const SYNCED_BEST_KEY = 'pairfect-synced-best';
+const TILE_ART_KEY = 'pairfect-tile-art';
 
 /** Số lượt chơi giữ lại trên bảng xếp hạng. */
 export const LEADERBOARD_SIZE = 10;
@@ -142,4 +143,15 @@ export function loadSyncedBest(): OnlineBest | null {
 
 export function saveSyncedBest(best: OnlineBest): void {
   write(SYNCED_BEST_KEY, JSON.stringify(best));
+}
+
+// ---------------- Bộ hình ô ----------------
+
+/** Mã bộ hình ô người chơi đã chọn, hoặc null nếu chưa chọn. Mã không còn tồn tại thì tileArt.ts tự dùng bộ mặc định. */
+export function loadTileArt(): string | null {
+  return read(TILE_ART_KEY) || null;
+}
+
+export function saveTileArt(id: string): void {
+  write(TILE_ART_KEY, id);
 }

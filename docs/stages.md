@@ -21,7 +21,7 @@ Toàn bộ dữ liệu màn chơi nằm trong `LEVELS` ở [`src/game/levels.ts`
 - **Cách chia loại hình.** Các cặp được chia lần lượt cho từng loại: loại 1, loại 2, … tới số loại của màn, rồi quay lại loại 1.
   - Khi số cặp đúng bằng hai lần số loại, mỗi loại có **4 ô**: 2 cặp, ghép kiểu nào cũng được.
   - Khi số loại nhiều hơn thế, các loại dư chỉ có **2 ô**, nên mỗi ô đó chỉ có đúng một ô để ghép. Đây là điều khiến màn 6 và 7 khó hơn.
-- **Hình trên ô.** Có 40 loại hình, tạo từ 8 hình dạng × 5 màu; màn 7 dùng đủ cả 40. Màn càng dùng nhiều loại thì càng nhiều ô trùng hình dạng hoặc trùng màu với ô khác, nên càng khó phân biệt khi nhìn nhanh.
+- **Hình trên ô.** Có 40 loại hình; màn 7 dùng đủ cả 40. Người chơi chọn bộ hình ở menu (thẻ "Hình ô"): mặc định là trái cây và con vật (emoji của máy), ngoài ra có hình khối, quái vật (vẽ riêng cho game), quái vật Tuxemon (pixel art) và các bộ ảnh thêm vào `src/assets/tiles`. Ở bộ mặc định, thứ tự các hình được chọn để màn đầu chỉ có những hình khác nhau rõ nhất; màn sau mới thêm dần những hình cùng tông màu (ví dụ mèo, hổ và sư tử), nên càng về sau càng phải nhìn kỹ hơn.
 
 ## Tổng quan các màn
 

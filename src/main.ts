@@ -4,6 +4,7 @@ import { initOnline } from './online';
 import { GameScene } from './scenes/GameScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { MenuScene } from './scenes/MenuScene';
+import { TileArtScene } from './scenes/TileArtScene';
 import { sizeFor } from './scenes/ui';
 
 // Khung chứa game: cả màn hình trừ phần tai thỏ / camera đục lỗ (xem index.html)
@@ -21,7 +22,7 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   // Scene đầu tiên trong danh sách được chạy khi mở game
-  scene: [MenuScene, GameScene, LeaderboardScene],
+  scene: [MenuScene, GameScene, LeaderboardScene, TileArtScene],
 });
 
 // Tỉ lệ màn hình đổi (chia đôi màn hình, kéo cửa sổ): đổi chiều rộng logic cho khớp.

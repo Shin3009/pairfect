@@ -110,23 +110,27 @@ src/
     levels.test.ts      Unit test cho cấu hình màn, tự chơi thử mọi màn
     scoring.ts          Điểm mỗi cặp, thưởng thời gian, giới hạn điểm mỗi màn (firestore.rules dùng)
     scoring.test.ts     Unit test: mọi màn nằm dưới giới hạn điểm, firestore.rules khớp
-    storage.ts          Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi, bản kỷ lục đã gửi
+    storage.ts          Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi, bản kỷ lục đã gửi, bộ hình ô đang chọn
     storage.test.ts     Unit test cho phần lưu trữ
-    tileArt.ts          Vẽ hình cho ô và đá bằng code (tạm thời, thay bằng ảnh thật sau)
+    tileArt.ts          Các bộ hình ô (trái cây & con vật bằng emoji, hình khối, bộ ảnh trong src/assets/tiles) và hình đá
+    imagePacks.ts       Gom ảnh trong src/assets/tiles thành các bộ hình ô
+    imagePacks.test.ts  Unit test cho việc gom và xếp thứ tự ảnh
+  assets/tiles/         Các bộ hình ô bằng ảnh: Quái vật (SVG vẽ riêng), Tuxemon (pixel art CC BY-SA 4.0, kèm credits.txt)
   scenes/
     ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
     icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn), Đảo bàn (mũi tên bắt chéo) và Đổi tên (bút chì) bằng code
     nameDialog.ts       Hộp nhập tên người chơi (HTML trong index.html, để gõ được tiếng Việt bằng bàn phím hệ thống)
-    MenuScene.ts        Màn hình chính: tên người chơi, Chơi (luôn từ màn 1), Bảng xếp hạng, Cách chơi
+    MenuScene.ts        Màn hình chính: tên người chơi, Hình ô, Chơi (luôn từ màn 1), Bảng xếp hạng, Cách chơi
     LeaderboardScene.ts Bảng xếp hạng: 10 lượt chơi điểm cao nhất, kèm màn lúc thua và ngày chơi
+    TileArtScene.ts     Chọn bộ hình cho các ô, mỗi bộ kèm vài ô mẫu
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua
 ```
 
 `Board.ts` không phụ thuộc Phaser nên có thể test riêng hoặc tái sử dụng.
 
-Luồng màn hình: `Menu` → `Game`, và `Menu` → `Leaderboard`. Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
+Luồng màn hình: `Menu` → `Game`, `Menu` → `Leaderboard` và `Menu` → `TileArt` (thẻ "Hình ô" ở góc trên bên phải menu). Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Về menu); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
 
-Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu (ở hộp thoại qua màn thì không làm gì, để lỡ tay không mất lượt chơi đang thắng); ở bảng xếp hạng thì về menu; ở menu thì đóng hộp thoại đang mở (kể cả hộp đổi tên; hộp nhập tên lần đầu thì bắt buộc nhập nên Back không làm gì), hoặc hỏi có thoát game không.
+Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu (ở hộp thoại qua màn thì không làm gì, để lỡ tay không mất lượt chơi đang thắng); ở bảng xếp hạng và màn chọn hình ô thì về menu; ở menu thì đóng hộp thoại đang mở (kể cả hộp đổi tên; hộp nhập tên lần đầu thì bắt buộc nhập nên Back không làm gì), hoặc hỏi có thoát game không.
 
 Bảng xếp hạng chỉ lưu trên máy (localStorage), giữ 10 lượt chơi điểm cao nhất. Một lượt chơi được ghi khi **thua** (hết giờ hoặc hết nước đi), với điểm cuối cùng và màn đang chơi lúc thua; hộp thoại thua báo hạng nếu lọt vào bảng. Bỏ cuộc thì không ghi: rời màn từ menu tạm dừng (Chơi lại màn / Về menu), hoặc về menu sau khi qua màn. Bằng điểm thì màn xa hơn xếp trên, vẫn bằng thì lượt chơi trước xếp trên. "Kỷ lục" ở menu là điểm cao nhất trên bảng.
 
@@ -145,7 +149,12 @@ Mọi đường đi tối đa 2 lần rẽ đều có dạng `a → p → q → 
 - **Độ khó, số màn:** sửa mảng `LEVELS` trong `src/game/levels.ts`. Lưu ý `rows * cols` phải là số chẵn, bàn nên rộng hơn cao (`cols > rows`), và `types` không vượt quá 40. `npm test` tự kiểm tra các điều kiện này và chơi thử hết mọi màn.
 - **Điểm, số lượt gợi ý/đảo, thưởng thời gian:** các hằng số đầu file `GameScene.ts` và `src/game/scoring.ts`. Tăng điểm mà vượt `MAX_SCORE_PER_STAGE` thì `npm test` báo lỗi: nâng giới hạn ở cả `scoring.ts` lẫn `firestore.rules`.
 - **Màu sắc giao diện:** đối tượng `C` trong `src/scenes/ui.ts`.
-- **Dùng hình ảnh thật thay cho hình vẽ bằng code:** thêm hàm `preload()` vào `MenuScene` (scene chạy đầu tiên) và load ảnh với key `tile-1`, `tile-2`, ... và `stone` cho đá (ví dụ `this.load.image('tile-1', 'assets/apple.png')`), sau đó bỏ các lời gọi `createTileTextures` trong `MenuScene` và `GameScene`. Ảnh nên là hình vuông, kích thước khoảng 128x128.
+- **Thêm bộ hình ô bằng ảnh:** tạo thư mục `src/assets/tiles/<tên bộ>/` và đặt vào đó ít nhất 40 ảnh `.png`, `.webp`, `.jpg`, `.jpeg` hoặc `.svg` (đuôi file viết thường). Chạy lại `npm run dev` (hoặc build), bộ mới hiện trong màn "Hình ô" với tên là tên thư mục.
+  - Ảnh xếp theo tên file, phần số so theo giá trị (`2.png` trước `10.png`): ảnh đầu tiên là loại 1. Màn 1 chỉ dùng 12 loại đầu, nên đặt những hình khác nhau rõ nhất lên trước.
+  - Ảnh nên có nền trong suốt. Phần viền trong suốt được tự cắt bỏ rồi phóng hình cho vừa ô, nên sprite nhỏ nằm giữa khung rộng vẫn đủ to. Ảnh nhỏ (như sprite pixel art 64x64) được phóng giữ nguyên từng điểm ảnh nên không bị nhòe. Thư mục có ít hơn 40 ảnh bị bỏ qua (có cảnh báo trong console).
+  - Ảnh có giấy phép yêu cầu ghi công (CC BY, CC BY-SA...): viết phần ghi công vào file `credits.txt` trong cùng thư mục. Màn "Hình ô" hiện nút "Ghi công" trên thẻ của bộ đó để người chơi xem.
+  - Game có sẵn hai bộ ảnh: **Quái vật** (40 sinh vật vẽ riêng cho game, file SVG) và **Tuxemon** (40 quái vật pixel art từ dự án mã nguồn mở [Tuxemon](https://opengameart.org/content/tuxemon-set-1-154-monsters-front-and-back-sprites-and-menu-animations), giấy phép CC BY-SA 4.0, ghi công tác giả trong `src/assets/tiles/Tuxemon/credits.txt`). Đổi sprite Tuxemon nào thì sửa luôn `credits.txt`.
+  - Ảnh trong thư mục này được đóng gói vào APK. Chỉ dùng ảnh bạn có quyền phát hành: ảnh của các thương hiệu như Pokémon thuộc bản quyền của chủ sở hữu, đưa lên Google Play sẽ bị gỡ app.
 
 Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset có giấy phép rõ ràng như CC0 từ kenney.nl), không dùng tài nguyên của game Onet gốc.
 

@@ -9,9 +9,11 @@ import {
   loadLeaderboard,
   loadPlayerName,
   loadSyncedBest,
+  loadTileArt,
   NAME_MAX,
   savePlayerName,
   saveSyncedBest,
+  saveTileArt,
   type LeaderboardEntry,
   type OnlineBest,
 } from './storage';
@@ -165,5 +167,18 @@ describe('kỷ lục đã gửi lên mạng trong localStorage', () => {
     expect(loadSyncedBest()).toBeNull();
     localStorage.setItem('pairfect-synced-best', '{hỏng');
     expect(loadSyncedBest()).toBeNull();
+  });
+});
+
+describe('bộ hình ô trong localStorage', () => {
+  beforeEach(() => vi.stubGlobal('localStorage', fakeStorage()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('chưa chọn thì null; chọn rồi đọc lại, chọn bộ khác thì ghi đè', () => {
+    expect(loadTileArt()).toBeNull();
+    saveTileArt('shapes');
+    expect(loadTileArt()).toBe('shapes');
+    saveTileArt('pack-Thú cưng');
+    expect(loadTileArt()).toBe('pack-Thú cưng');
   });
 });
