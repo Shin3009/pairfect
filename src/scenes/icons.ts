@@ -4,9 +4,22 @@ import Phaser from 'phaser';
  * Biểu tượng cho các nút, vẽ bằng Canvas 2D giống hình các ô (xem tileArt.ts), không cần file ảnh.
  * Hình vẽ màu trắng trên khung 24x24 rồi phóng lên ICON_SIZE; khi hiển thị thì tô màu bằng setTint.
  */
-export type IconName = 'hint' | 'shuffle' | 'edit';
+export type IconName = 'hint' | 'shuffle' | 'edit' | 'sound' | 'mute';
 
 const ICON_SIZE = 64;
+
+/** Cái loa (thân và miệng loa) ở nửa trái khung, dùng cho Âm thanh và Tắt tiếng. */
+function speaker(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.moveTo(3, 9);
+  ctx.lineTo(7, 9);
+  ctx.lineTo(12, 4.5);
+  ctx.lineTo(12, 19.5);
+  ctx.lineTo(7, 15);
+  ctx.lineTo(3, 15);
+  ctx.closePath();
+  ctx.fill();
+}
 
 const DRAW: Record<IconName, (ctx: CanvasRenderingContext2D) => void> = {
   // Bóng đèn
@@ -73,6 +86,27 @@ const DRAW: Record<IconName, (ctx: CanvasRenderingContext2D) => void> = {
     ctx.lineTo(-5.6, 2.8);
     ctx.closePath();
     ctx.fill();
+  },
+  // Loa có hai vòng sóng
+  sound: (ctx) => {
+    speaker(ctx);
+    ctx.lineWidth = 2;
+    for (const r of [4, 7.5]) {
+      ctx.beginPath();
+      ctx.arc(12.5, 12, r, -0.3 * Math.PI, 0.3 * Math.PI);
+      ctx.stroke();
+    }
+  },
+  // Loa có dấu X
+  mute: (ctx) => {
+    speaker(ctx);
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(15.5, 9);
+    ctx.lineTo(21.5, 15);
+    ctx.moveTo(21.5, 9);
+    ctx.lineTo(15.5, 15);
+    ctx.stroke();
   },
 };
 

@@ -102,7 +102,7 @@ export class Button {
   }
 }
 
-/** Nút vuông bo góc nhẹ có biểu tượng, kèm huy hiệu số lượt còn lại ở góc trên bên phải. */
+/** Nút vuông bo góc nhẹ có biểu tượng, kèm huy hiệu số lượt còn lại ở góc trên bên phải (có thể không có huy hiệu). */
 export class IconButton {
   private bg: Phaser.GameObjects.Graphics;
   private icon: Phaser.GameObjects.Image;
@@ -112,7 +112,7 @@ export class IconButton {
   private enabled = true;
 
   constructor(
-    scene: Phaser.Scene,
+    private scene: Phaser.Scene,
     private x: number,
     private y: number,
     private size: number,
@@ -131,7 +131,13 @@ export class IconButton {
     this.zone = tapZone(scene, x, y, size, size, depth, () => this.enabled && onClick());
   }
 
-  setCount(n: number, enabled: boolean): void {
+  /** Đổi biểu tượng, giữ nguyên cỡ và màu. */
+  setIcon(name: IconName): void {
+    this.icon.setTexture(iconTexture(this.scene, name)).setDisplaySize(this.size * 0.64, this.size * 0.64);
+  }
+
+  /** Vẽ nút với số lượt `n` ở huy hiệu; `n` là null thì không có huy hiệu. */
+  setCount(n: number | null, enabled: boolean): void {
     this.enabled = enabled;
     const s = this.size;
     this.bg.clear();
@@ -139,6 +145,9 @@ export class IconButton {
     this.bg.fillRoundedRect(this.x - s / 2, this.y - s / 2, s, s, 10);
     this.icon.setAlpha(enabled ? 1 : 0.6);
 
+    this.badge.clear();
+    this.count.setVisible(n !== null);
+    if (n === null) return;
     // Huy hiệu hình viên thuốc giữ cố định mép phải, số nhiều chữ số thì dài sang trái đè lên góc nút.
     // Lượt cộng dồn qua nhiều màn có thể rất lớn: thu nhỏ chữ để huy hiệu không quá rộng.
     this.count.setText(String(n));
@@ -147,7 +156,6 @@ export class IconButton {
     const w = Math.max(h, this.count.displayWidth + 10);
     const right = this.x + s / 2 + 6;
     const top = this.y - s / 2 - 6;
-    this.badge.clear();
     this.badge.fillStyle(enabled ? C.badge : C.disabled, 1).fillRoundedRect(right - w, top, w, h, h / 2);
     // Viền màu nền HUD tách huy hiệu khỏi nút
     this.badge.lineStyle(2, C.panel, 1).strokeRoundedRect(right - w, top, w, h, h / 2);

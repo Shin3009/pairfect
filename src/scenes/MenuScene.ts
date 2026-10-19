@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { audible } from '../audio/rules';
+import { soundSettings, stopMusic } from '../audio/sound';
 import { HARD_START } from '../game/levels';
 import { loadBest, loadPlayerName, loadSavedGame, type SavedGame } from '../game/storage';
 import { createTileTextures, MAX_TYPES, TEXTURE_SIZE, tileKey } from '../game/tileArt';
@@ -39,6 +41,8 @@ export class MenuScene extends Phaser.Scene {
   create(): void {
     this.dialog = null;
     this.chip = [];
+    // Về menu từ màn chơi hay màn chọn âm thanh: tắt dần nhạc nền
+    stopMusic();
     createTileTextures(this);
     this.cameras.main.setBackgroundColor(C.bg).fadeIn(250, 31, 59, 77);
     onGameResize(this, () => this.scene.restart());
@@ -60,7 +64,7 @@ export class MenuScene extends Phaser.Scene {
     this.createButtons(x);
 
     this.drawPlayerChip();
-    this.drawArtChip();
+    this.drawSoundChip(this.drawArtChip() - 16);
     // Lần đầu mở game: hỏi tên người chơi để ghi kèm kỷ lục
     if (!loadPlayerName()) this.askName();
   }
@@ -131,8 +135,11 @@ export class MenuScene extends Phaser.Scene {
     this.chip = [bg, name, icon, zone];
   }
 
-  /** Thẻ chọn bộ hình ô ở góc trên bên phải, đối xứng với thẻ tên: một ô của bộ đang dùng kèm chữ "Hình ô". */
-  private drawArtChip(): void {
+  /**
+   * Thẻ chọn bộ hình ô ở góc trên bên phải, đối xứng với thẻ tên: một ô của bộ đang dùng kèm chữ "Hình ô".
+   * Trả về mép trái của thẻ, để đặt thẻ Âm thanh bên cạnh.
+   */
+  private drawArtChip(): number {
     const right = this.scale.width - 24;
     const cy = 24 + CHIP_H / 2;
     const thumb = CHIP_H - 8;
@@ -143,6 +150,23 @@ export class MenuScene extends Phaser.Scene {
     bg.fillStyle(C.panel, 1).fillRoundedRect(x, cy - CHIP_H / 2, w, CHIP_H, CHIP_H / 2);
     this.add.image(x + 6 + thumb / 2, cy, tileKey(1)).setDisplaySize(thumb, thumb);
     tapZone(this, x + w / 2, cy, w, CHIP_H, 1, () => this.scene.start('TileArt'));
+    return x;
+  }
+
+  /** Thẻ mở màn chọn âm thanh, ngay bên trái thẻ "Hình ô" (mép phải ở `right`): biểu tượng loa kèm chữ "Âm thanh". */
+  private drawSoundChip(right: number): void {
+    const cy = 24 + CHIP_H / 2;
+    const bg = this.add.graphics();
+    const label = this.add.text(right - 22, cy, 'Âm thanh', textStyle(24, C.text, 'bold')).setOrigin(1, 0.5);
+    const iconX = label.x - label.width - 12 - CHIP_ICON;
+    // Tắt cả hiệu ứng lẫn nhạc thì hiện loa gạch chéo
+    this.add
+      .image(iconX + CHIP_ICON / 2, cy, iconTexture(this, audible(soundSettings()) ? 'sound' : 'mute'))
+      .setDisplaySize(CHIP_ICON, CHIP_ICON)
+      .setTint(C.iconDim);
+    const x = iconX - 18;
+    bg.fillStyle(C.panel, 1).fillRoundedRect(x, cy - CHIP_H / 2, right - x, CHIP_H, CHIP_H / 2);
+    tapZone(this, (x + right) / 2, cy, right - x, CHIP_H, 1, () => this.scene.start('Sound'));
   }
 
   /** Lượt chơi mới từ màn 1. Màn đầu tiên tự lưu đè lên lượt chơi đang lưu (nếu có). */

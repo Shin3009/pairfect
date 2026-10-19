@@ -6,6 +6,7 @@ import { GameScene } from './scenes/GameScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { MenuScene } from './scenes/MenuScene';
 import { PvpLobbyScene } from './scenes/PvpLobbyScene';
+import { SoundScene } from './scenes/SoundScene';
 import { TileArtScene } from './scenes/TileArtScene';
 import { sizeFor } from './scenes/ui';
 import { showToast } from './toast';
@@ -28,7 +29,7 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   // Scene đầu tiên trong danh sách được chạy khi mở game
-  scene: [MenuScene, GameScene, LeaderboardScene, TileArtScene, PvpLobbyScene],
+  scene: [MenuScene, GameScene, LeaderboardScene, TileArtScene, SoundScene, PvpLobbyScene],
 });
 
 // Hiệu ứng và nhạc nền, dùng chung cho mọi scene (xem audio/sound.ts)

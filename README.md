@@ -198,11 +198,12 @@ src/
     *.test.ts           Unit test cho giao thức, đồng hồ, luật trận đấu và phiên
   scenes/
     ui.ts               Kích thước game, bảng màu, nút bấm và hộp thoại dùng chung
-    icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn), Đảo bàn (mũi tên bắt chéo) và Đổi tên (bút chì) bằng code
+    icons.ts            Vẽ biểu tượng nút Gợi ý (bóng đèn), Đảo bàn (mũi tên bắt chéo), Đổi tên (bút chì) và Âm thanh / Tắt tiếng (cái loa) bằng code
     nameDialog.ts       Hộp nhập tên người chơi và mã phòng (HTML trong index.html, để gõ được tiếng Việt bằng bàn phím hệ thống)
-    MenuScene.ts        Màn hình chính: tên người chơi, Hình ô, Tiếp tục (khi có lượt chơi đang lưu), Chơi / Chơi mới (luôn từ màn 1), Đấu online, Bảng xếp hạng, Cách chơi
+    MenuScene.ts        Màn hình chính: tên người chơi, Âm thanh, Hình ô, Tiếp tục (khi có lượt chơi đang lưu), Chơi / Chơi mới (luôn từ màn 1), Đấu online, Bảng xếp hạng, Cách chơi
     LeaderboardScene.ts Bảng xếp hạng, hai thẻ: Toàn cầu (online, mỗi người chơi một dòng) và Trên máy (10 lượt chơi điểm cao nhất, kèm màn lúc thua và ngày chơi)
     TileArtScene.ts     Chọn bộ hình cho các ô, mỗi bộ kèm vài ô mẫu
+    SoundScene.ts       Chọn bộ âm thanh (chạm để nghe mẫu, nhạc nền của bộ đang chọn phát trong lúc mở), bật / tắt hiệu ứng và nhạc nền
     PvpLobbyScene.ts    Phòng chờ đấu online: tạo phòng (hiện mã), vào phòng (nhập mã), đang kết nối, lỗi
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua; cả trận đấu online
 database.rules.json     Quy tắc bảo mật của Realtime Database cho phòng chờ đấu online (dán vào Firebase Console)
@@ -216,11 +217,11 @@ docs/security.md        Rà soát bảo mật bản web: những gì đã sửa 
 
 `Board.ts` không phụ thuộc Phaser nên có thể test riêng hoặc tái sử dụng.
 
-Luồng màn hình: `Menu` → `Game`, `Menu` → `Leaderboard`, `Menu` → `TileArt` (thẻ "Hình ô" ở góc trên bên phải menu) và `Menu` → `PvpLobby` → `Game` (đấu online). Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Lưu và về menu; "Chơi lại màn" tốn một lượt chơi lại như khi thua, hết lượt thì không có nút này); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
+Luồng màn hình: `Menu` → `Game`, `Menu` → `Leaderboard`, `Menu` → `TileArt` (thẻ "Hình ô" ở góc trên bên phải menu), `Menu` → `Sound` (thẻ "Âm thanh" bên trái thẻ "Hình ô") và `Menu` → `PvpLobby` → `Game` (đấu online). Trong lúc chơi, nút **II** mở menu tạm dừng (Tiếp tục / Chơi lại màn / Lưu và về menu; "Chơi lại màn" tốn một lượt chơi lại như khi thua, hết lượt thì không có nút này); đồng hồ và hiệu ứng dừng lại cho tới khi tiếp tục. Game cũng tự tạm dừng khi app bị đưa xuống nền (về màn hình chính, chuyển app, tắt màn hình).
 
 **Lưu lượt chơi.** Lượt chơi đang dở luôn được lưu trong localStorage (khóa `pairfect-saved-game`): đúng bàn đang chơi, điểm, thời gian còn lại, lượt Gợi ý / Đảo bàn / chơi lại. Trên Android còn một bản sao trong bộ nhớ riêng của app (SharedPreferences, plugin `@capacitor/preferences`), vì WebView có thể chưa kịp ghi localStorage xuống đĩa thì app đã bị tắt; lúc mở app, bản nào lưu sau thì được dùng. Game lưu khi vào màn, mỗi giây, khi tạm dừng (nên cũng lưu mỗi khi app xuống nền), khi thắng, khi thua và khi bấm "Lưu và về menu". Nhờ vậy app bị tắt ngang (vuốt khỏi danh sách app gần đây, hệ điều hành dọn app, lỗi, hết pin) vẫn chơi tiếp được, chỉ mất tối đa khoảng một giây. Có lượt chơi đang lưu thì menu có nút **Tiếp tục – Màn N** ở trên cùng; "Chơi mới" sẽ hỏi lại trước khi xóa lượt đang lưu. App bị tắt lúc đang hiện hộp thoại thua thì chơi tiếp sẽ hiện lại đúng hộp thoại đó; tắt lúc đang hiện hộp thoại qua màn thì chơi tiếp từ màn sau.
 
-Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu và ghi lượt chơi lên bảng xếp hạng, giống nút "Về menu" (ở hộp thoại qua màn thì không làm gì, để lỡ tay không rời màn); ở bảng xếp hạng và màn chọn hình ô thì về menu; ở menu thì đóng hộp thoại đang mở (kể cả hộp đổi tên; hộp nhập tên lần đầu thì bắt buộc nhập nên Back không làm gì), hoặc hỏi có thoát game không.
+Nút Back của Android: trong lúc chơi thì mở menu tạm dừng, đang tạm dừng thì chơi tiếp, ở hộp thoại thua thì về menu và ghi lượt chơi lên bảng xếp hạng, giống nút "Về menu" (ở hộp thoại qua màn thì không làm gì, để lỡ tay không rời màn); ở bảng xếp hạng, màn chọn hình ô và màn âm thanh thì về menu; ở menu thì đóng hộp thoại đang mở (kể cả hộp đổi tên; hộp nhập tên lần đầu thì bắt buộc nhập nên Back không làm gì), hoặc hỏi có thoát game không.
 
 Bảng xếp hạng trên máy (thẻ *Trên máy*) lưu trong localStorage, giữ 10 lượt chơi điểm cao nhất. Khi **thua** (hết giờ hoặc hết nước đi), hoặc chọn "Chơi lại màn" khi tạm dừng, người chơi được **chơi lại** màn đó với điểm, lượt Gợi ý và lượt Đảo bàn như lúc mới vào màn; cả lượt chơi chỉ có **3 lượt chơi lại** (dùng chung cho hai cách), hết thì hộp thoại thua chỉ còn nút "Về menu". Lượt chơi chỉ được ghi khi người chơi **về menu từ hộp thoại thua** (nút "Về menu" hoặc nút Back), với điểm cuối cùng và màn đang chơi lúc thua; hộp thoại thua báo trước hạng sẽ được nếu lọt vào bảng. "Lưu và về menu" (ở menu tạm dừng và hộp thoại qua màn) giữ lượt chơi lại để chơi tiếp, chưa ghi. Lượt chơi bị bỏ để bắt đầu lượt mới ("Chơi mới" ở menu) thì không bao giờ được ghi. Bằng điểm thì màn xa hơn xếp trên, vẫn bằng thì lượt chơi trước xếp trên. "Kỷ lục" ở menu là điểm cao nhất trên bảng.
 
