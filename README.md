@@ -17,7 +17,7 @@ npm run build      # build ra thư mục dist/
 
 Lệnh `npm run dev` cũng in ra địa chỉ mạng LAN, bạn có thể mở bằng trình duyệt điện thoại (cùng Wi-Fi) để thử cảm ứng ngay mà chưa cần build Android.
 
-Khi chạy `npm run dev`, mở DevTools và gõ `game.scene.getScene('Game')` để xem trạng thái game (bàn chơi, điểm, thời gian...).
+Khi chạy `npm run dev`, mở DevTools và gõ `game.scene.getScene('Game')` để xem trạng thái game (bàn chơi, điểm, thời gian...). Để nghe thử âm thanh, chạm vào game một lần rồi gõ chẳng hạn `sound.playSfx('match', 3)`, `sound.playHit('fog')`, `sound.startMusic()` hay `sound.updateSoundSettings({ set: 'chip' })`.
 
 ## Build APK trên Windows (một lệnh)
 
@@ -176,6 +176,14 @@ src/
     imagePacks.ts       Gom ảnh trong src/assets/tiles thành các bộ hình ô
     imagePacks.test.ts  Unit test cho việc gom và xếp thứ tự ảnh
   assets/tiles/         Các bộ hình ô bằng ảnh: Quái vật (SVG vẽ riêng), Tuxemon (pixel art CC BY-SA 4.0, kèm credits.txt)
+  audio/                Âm thanh tạo bằng code (Web Audio, không có file): ba bộ Gỗ & chuông, Bong bóng, 8-bit
+    sets.ts             Tiếng cho từng sự kiện, tiếng bị tấn công và nhạc nền của ba bộ (số liệu theo bản mẫu trong docs/superpowers/specs)
+    voices.ts           Các nốt và nhạc cụ cơ bản (marimba, chuông, tiếng gõ gỗ)
+    rules.ts            Nốt cao dần theo chuỗi, nút loa tắt / trả lại tiếng
+    music.ts            Phát nhạc nền lặp, không phát lại từ đầu khi chuyển màn, không phát dồn sau khi app bị ẩn
+    synth.ts            Phát âm thật bằng Web Audio
+    sound.ts            Dùng chung cho các scene: phát hiệu ứng, bật / tắt nhạc theo cài đặt
+    *.test.ts           Unit test cho dữ liệu các bộ, luật và bộ phát nhạc
   pvp/                  Đấu online (xem mục Đấu online)
     protocol.ts         Tin nhắn giữa hai máy (kiểm tra đúng dạng), mã phòng, thông báo lỗi
     clock.ts            Đo độ lệch đồng hồ giữa hai máy qua ping

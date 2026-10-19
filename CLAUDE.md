@@ -24,7 +24,7 @@ npm run icons                                # re-render the app icon and favico
 
 There is no linter configured.
 
-In dev mode, `main.ts` exposes `window.game`. Use `game.scene.getScene('Game')` in DevTools to inspect the live board, score and timer. It also exposes `pvpBot(stepMs?)`, which starts an online match against a local bot with no network or Firebase (`src/pvp/bot.ts`), and `?relay` in the page URL forces WebRTC through TURN.
+In dev mode, `main.ts` exposes `window.game`. Use `game.scene.getScene('Game')` in DevTools to inspect the live board, score and timer. It also exposes `pvpBot(stepMs?)`, which starts an online match against a local bot with no network or Firebase (`src/pvp/bot.ts`), and `sound` (`playSfx`, `playHit`, `startMusic`, `stopMusic`, `updateSoundSettings`) for listening to the sound sets; tap the game once first to unlock audio. `?relay` in the page URL forces WebRTC through TURN.
 
 Firebase config is read at build time from `VITE_FIREBASE_API_KEY` and `VITE_FIREBASE_PROJECT_ID` in `.env.local` (gitignored; template in `.env.example`, typed in `src/vite-env.d.ts`). Without them the game runs normally and simply doesn't upload scores. The Firebase project also needs the Anonymous sign-in provider enabled. `firestore.rules` is the matching Firestore security-rules file; it's pasted into the Firebase Console, not deployed by any script.
 
@@ -136,6 +136,13 @@ The code is split into a pure logic layer and a rendering layer:
     - Reads are split per field because `offer` / `answer` carry the players' IP addresses: any signed-in user can read `hostName`, `protocol` and `guest`, but only the host and the current guest can read `offer` / `answer`, and nobody can read a whole room. So `joinRoom` reads those three fields one by one, never the room. Builds up to 0.2.0 read the whole room and so can't join under these rules.
   - **`turn.ts`** fetches `iceServers` from `https://<VITE_METERED_DOMAIN>/api/v1/turn/credentials?apiKey=…` (cached 10 min) and falls back to Google STUN on any error.
   - Room codes use `CODE_ALPHABET` (no I, O, 0, 1). The rules' `$code` regex must match it.
+- **`src/audio/`** is sound: three selectable sets (`wood` "Gỗ & chuông", `bubble` "Bong bóng", `chip` "8-bit"), each with sound effects, attack sounds for PvP, and a looping background track. Everything is synthesized with Web Audio; there are no audio files.
+  - The approved prototype `docs/superpowers/specs/2026-10-19-sound-audition.html` is the reference for every sound: `sets.ts` copies its numbers exactly. The design is `docs/superpowers/specs/2026-10-19-sound-design.md`.
+  - `sets.ts` (data), `voices.ts` (instrument helpers), `rules.ts` (combo pitch, mute toggle) and `music.ts` (`MusicPlayer`) are pure and written against the `Voices` interface, so they are tested in Node with `src/test/fakeVoices.ts`. `synth.ts` implements `Voices` with Web Audio on Phaser's own `AudioContext`, so Phaser's first-tap unlock covers it.
+  - `MusicPlayer` schedules 16th notes `LOOKAHEAD` (0.15 s) ahead, pumped every 40 ms. Playing the set that is already playing does nothing, so the music never restarts or doubles. A late pump (the page was hidden) skips the missed part instead of playing it in a burst.
+  - `sound.ts` is the controller the scenes call. It lives outside the scenes (like `toast.ts`), so the music carries on through `scene.restart`. Music plays only while a scene wants it (`startMusic` / `stopMusic`) **and** the `music` setting is on. `playSfx` / `playHit` drop the sound while `sfx` is off or the context isn't `running` (still locked, or the page hidden), so nothing piles up and plays at once later.
+  - On `HIDDEN` the controller suspends the context and on `VISIBLE` resumes it. Phaser's own `pauseOnBlur` is turned off so split screen doesn't mute the game; note that Phaser's sound manager resumes a suspended context on every frame while the window has focus, so the suspend only holds while the page is really hidden, which is what we want.
+  - Sounds use `Math.random` for pitch jitter and shuffle ticks, **never** the board's rng: touching `Board.rng` would desync PvP boards.
 - **`src/toast.ts`** shows `showToast(text, 'ok' | 'error')`, a small HTML pill (`#toast` in `index.html`) centered at the top of the screen.
   - It is HTML rather than Phaser so it shows over any scene and survives scene restarts.
   - It has `pointer-events: none`, so taps go through to the game, and a new toast replaces the current one.

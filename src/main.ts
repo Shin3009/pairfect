@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { initSound, playHit, playSfx, startMusic, stopMusic, updateSoundSettings } from './audio/sound';
 import { bindAppEvents, initSaveBackup } from './native';
 import { initOnline, onSyncResult } from './online';
 import { GameScene } from './scenes/GameScene';
@@ -29,6 +30,9 @@ const game = new Phaser.Game({
   // Scene đầu tiên trong danh sách được chạy khi mở game
   scene: [MenuScene, GameScene, LeaderboardScene, TileArtScene, PvpLobbyScene],
 });
+
+// Hiệu ứng và nhạc nền, dùng chung cho mọi scene (xem audio/sound.ts)
+initSound(game);
 
 // Tỉ lệ màn hình đổi (chia đôi màn hình, kéo cửa sổ): đổi chiều rộng logic cho khớp.
 // Các scene nghe sự kiện resize (qua onGameResize) để sắp xếp lại bố cục.
@@ -61,9 +65,11 @@ onSyncResult((r) => {
 initOnline();
 
 // Truy cập game từ DevTools khi phát triển: window.game.scene.getScene('Game'),
-// và pvpBot() để thử giao diện đấu online với máy, không cần mạng (xem pvp/bot.ts)
+// pvpBot() để thử giao diện đấu online với máy, không cần mạng (xem pvp/bot.ts), và sound để nghe thử âm thanh
 if (import.meta.env.DEV) {
-  const w = window as unknown as { game: Phaser.Game; pvpBot: (stepMs?: number) => void };
+  const w = window as unknown as { game: Phaser.Game; pvpBot: (stepMs?: number) => void; sound: object };
   w.game = game;
+  // sound.playSfx('match', 3), sound.playHit('fog'), sound.startMusic()... để nghe thử âm thanh (chạm vào game một lần trước)
+  w.sound = { playSfx, playHit, startMusic, stopMusic, updateSoundSettings };
   w.pvpBot = (stepMs) => void import('./pvp/bot').then(({ startBotMatch }) => startBotMatch(game, stepMs));
 }
