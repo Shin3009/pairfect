@@ -149,11 +149,12 @@ The code is split into a pure logic layer and a rendering layer:
   - **`src/scenes/icons.ts`** draws button icons with the Canvas 2D API on a 24×24 grid, in white, under the keys `icon-<name>`. `iconTexture(scene, name)` creates a texture on first use, and `IconButton` tints it.
   - `showDialog` adds a full-screen interactive shade that blocks taps underneath, and returns a function that closes it.
   - It shrinks the body font (down to 14px) until the dialog fits the 720-high screen. `bodyAlign: 'left'` left-aligns long lists such as the tile set credits.
-- **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores five keys:
+- **`src/game/storage.ts`** reads and writes `localStorage`, ignoring storage errors. It stores six keys:
   - the leaderboard (`pairfect-leaderboard`);
   - the player name (`pairfect-player-name`, a plain string), which always goes through `cleanName` (NFC, control and bidi characters removed, at most `NAME_MAX` = 20 characters);
   - the last row uploaded successfully (`pairfect-synced-best`, an `OnlineBest` `{ name, score, stage }`);
   - the chosen tile art set id (`pairfect-tile-art`, a plain string; validated by `tileArt.selectedTileArt`, not by storage);
+  - the sound settings (`pairfect-sound`, `{ set, sfx, music }`, see `src/audio/` below). `loadSoundSettings` falls back to `DEFAULT_SOUND` field by field, and an unknown set becomes `wood`. It isn't mirrored to SharedPreferences, since losing it only resets the defaults;
   - the saved run (`pairfect-saved-game`, `{ savedAt, game: SavedGame | null }`; see "Saved run" above). `loadSavedGame` returns null for a malformed save, but keeps the stage entry and drops only `play` if just that part is malformed. The grid itself is checked later by `Board.load`.
 
   The high score (`loadBest`) is the leaderboard's top score; the old separate `pairfect-best` key is no longer read or written.

@@ -170,7 +170,7 @@ src/
     rng.ts              Số ngẫu nhiên có hạt giống: hai máy đấu online sinh cùng một bàn
     scoring.ts          Điểm mỗi cặp, thưởng thời gian, giới hạn điểm mỗi màn (firestore.rules dùng)
     scoring.test.ts     Unit test: mọi màn nằm dưới giới hạn điểm, firestore.rules khớp
-    storage.ts          Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi, bản kỷ lục đã gửi, bộ hình ô đang chọn, lượt chơi đang lưu
+    storage.ts          Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi, bản kỷ lục đã gửi, bộ hình ô đang chọn, cài đặt âm thanh, lượt chơi đang lưu
     storage.test.ts     Unit test cho phần lưu trữ
     tileArt.ts          Các bộ hình ô (trái cây & con vật bằng emoji, hình khối, bộ ảnh trong src/assets/tiles) và hình đá
     imagePacks.ts       Gom ảnh trong src/assets/tiles thành các bộ hình ô

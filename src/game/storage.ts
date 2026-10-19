@@ -1,6 +1,6 @@
 /**
  * Lưu vào localStorage: bảng xếp hạng (kỷ lục là điểm cao nhất trên bảng), tên người chơi,
- * bản kỷ lục đã gửi lên mạng (xem online.ts), bộ hình ô đang chọn và lượt chơi đang lưu dở.
+ * bản kỷ lục đã gửi lên mạng (xem online.ts), bộ hình ô đang chọn, cài đặt âm thanh và lượt chơi đang lưu dở.
  * Không phụ thuộc Phaser. Mọi lỗi lưu trữ (trình duyệt chặn, chế độ ẩn danh...) đều được bỏ qua.
  */
 
@@ -9,6 +9,7 @@ const PLAYER_NAME_KEY = 'pairfect-player-name';
 const SYNCED_BEST_KEY = 'pairfect-synced-best';
 const TILE_ART_KEY = 'pairfect-tile-art';
 const SAVED_GAME_KEY = 'pairfect-saved-game';
+const SOUND_KEY = 'pairfect-sound';
 
 /** Số lượt chơi giữ lại trên bảng xếp hạng. */
 export const LEADERBOARD_SIZE = 10;
@@ -160,6 +161,37 @@ export function loadTileArt(): string | null {
 
 export function saveTileArt(id: string): void {
   write(TILE_ART_KEY, id);
+}
+
+// ---------------- Âm thanh ----------------
+
+/** Bộ âm thanh: Gỗ & chuông, Bong bóng, 8-bit (xem audio/sets.ts). */
+export type SoundSetId = 'wood' | 'bubble' | 'chip';
+
+export const SOUND_SET_IDS: readonly SoundSetId[] = ['wood', 'bubble', 'chip'];
+
+/** Bộ âm thanh đang dùng, và hiệu ứng / nhạc nền có bật không. */
+export interface SoundSettings {
+  set: SoundSetId;
+  sfx: boolean;
+  music: boolean;
+}
+
+export const DEFAULT_SOUND: Readonly<SoundSettings> = { set: 'wood', sfx: true, music: true };
+
+/** Cài đặt âm thanh đã lưu. Trường nào thiếu hay hỏng thì lấy mặc định; bộ không còn tồn tại thì về bộ mặc định. */
+export function loadSoundSettings(): SoundSettings {
+  const r = readJson(SOUND_KEY);
+  const o = typeof r === 'object' && r !== null ? (r as Record<string, unknown>) : {};
+  return {
+    set: SOUND_SET_IDS.find((id) => id === o.set) ?? DEFAULT_SOUND.set,
+    sfx: typeof o.sfx === 'boolean' ? o.sfx : DEFAULT_SOUND.sfx,
+    music: typeof o.music === 'boolean' ? o.music : DEFAULT_SOUND.music,
+  };
+}
+
+export function saveSoundSettings(s: SoundSettings): void {
+  write(SOUND_KEY, JSON.stringify({ set: s.set, sfx: s.sfx, music: s.music }));
 }
 
 // ---------------- Lượt chơi đang lưu ----------------

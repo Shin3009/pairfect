@@ -4,12 +4,14 @@ import {
   addToLeaderboard,
   clearSavedGame,
   cleanName,
+  DEFAULT_SOUND,
   insertEntry,
   LEADERBOARD_SIZE,
   loadBest,
   loadLeaderboard,
   loadPlayerName,
   loadSavedGame,
+  loadSoundSettings,
   loadSyncedBest,
   loadTileArt,
   NAME_MAX,
@@ -17,6 +19,7 @@ import {
   restoreSavedGame,
   saveGame,
   savePlayerName,
+  saveSoundSettings,
   setSavedGameMirror,
   saveSyncedBest,
   saveTileArt,
@@ -311,5 +314,42 @@ describe('bộ hình ô trong localStorage', () => {
     expect(loadTileArt()).toBe('shapes');
     saveTileArt('pack-Thú cưng');
     expect(loadTileArt()).toBe('pack-Thú cưng');
+  });
+});
+
+describe('cài đặt âm thanh trong localStorage', () => {
+  const SOUND_KEY = 'pairfect-sound';
+  beforeEach(() => vi.stubGlobal('localStorage', fakeStorage()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('chưa lưu thì mặc định', () => {
+    expect(loadSoundSettings()).toEqual({ set: 'wood', sfx: true, music: true });
+  });
+
+  it('lưu rồi đọc lại', () => {
+    saveSoundSettings({ set: 'chip', sfx: false, music: true });
+    expect(loadSoundSettings()).toEqual({ set: 'chip', sfx: false, music: true });
+  });
+
+  it('JSON hỏng thì mặc định', () => {
+    localStorage.setItem(SOUND_KEY, '{oops');
+    expect(loadSoundSettings()).toEqual(DEFAULT_SOUND);
+  });
+
+  it('trường sai kiểu hay thiếu thì trường đó lấy mặc định', () => {
+    localStorage.setItem(SOUND_KEY, JSON.stringify({ set: 'chip', sfx: 'no' }));
+    expect(loadSoundSettings()).toEqual({ set: 'chip', sfx: true, music: true });
+  });
+
+  it('bộ không còn tồn tại thì về wood', () => {
+    localStorage.setItem(SOUND_KEY, JSON.stringify({ set: 'piano', sfx: false, music: false }));
+    expect(loadSoundSettings()).toEqual({ set: 'wood', sfx: false, music: false });
+  });
+
+  it('trả về bản sao, sửa không ảnh hưởng mặc định', () => {
+    const s = loadSoundSettings();
+    s.sfx = false;
+    expect(DEFAULT_SOUND.sfx).toBe(true);
+    expect(loadSoundSettings().sfx).toBe(true);
   });
 });
