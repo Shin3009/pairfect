@@ -1,6 +1,6 @@
 {
   "name": "pairfect",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Pairfect: Tile Connect — game nối hình (kiểu Onet / Shisen-Sho) — Phaser + TypeScript + Capacitor",
   "scripts": {
     "dev": "vite",
