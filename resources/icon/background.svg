@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="-25 -25 150 150">
+  <!-- Lớp nền của icon app (xem scripts/icons.mjs): màu nền của game, sáng dần lên phía trên.
+       Khung 108dp của adaptive icon; phần hiện ra trên màn hình là 0..100. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#33718e"/>
+      <stop offset="1" stop-color="#1b3545"/>
+    </linearGradient>
+  </defs>
+  <rect x="-25" y="-25" width="150" height="150" fill="url(#bg)"/>
+</svg>

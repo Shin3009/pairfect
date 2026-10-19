@@ -344,6 +344,11 @@ if ($newJava -ne $java) {
   Write-Ok 'Đã bật chế độ toàn màn hình trong MainActivity.java'
 }
 
+# Icon app: chép đè icon mặc định của Capacitor bằng icon của game, tạo sẵn trong resources\android\res
+# (sửa hình trong resources\icon\*.svg rồi chạy npm run icons).
+Copy-Item -Path (Join-Path $Root 'resources\android\res\*') -Destination (Join-Path $androidDir 'app\src\main\res') -Recurse -Force
+Write-Ok 'Đã chép icon app vào project Android'
+
 # Phiên bản app lấy theo "version" trong package.json (đổi bằng: npm version X.Y.Z --no-git-tag-version).
 # versionName là số hiện trong phần cài đặt của Android; versionCode là số nguyên phải tăng ở mỗi bản cập nhật
 # lên Google Play, tính bằng X*10000 + Y*100 + Z nên Y và Z phải dưới 100.

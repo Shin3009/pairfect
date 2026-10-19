@@ -33,7 +33,7 @@ build-apk.bat -Release         :: APK release đã ký để gửi người khá
 
 Script tự dò Android SDK theo thứ tự: biến `ANDROID_HOME`/`ANDROID_SDK_ROOT`, file `android\local.properties`, cấu hình của Android Studio (kể cả bản Preview/Canary), rồi các vị trí mặc định. Nếu vẫn không tìm thấy, lấy đường dẫn trong Android Studio (*Settings → Languages & Frameworks → Android SDK → Android SDK Location*) rồi chạy `build-apk.bat -SdkPath "<đường dẫn>"`. Tương tự, có thể chỉ định JDK bằng `-JdkPath "<thư mục cài Android Studio>\jbr"`.
 
-File APK nằm trong thư mục `apk-output\`. Script lo hết các bước: cài thư viện, build code, tạo project Android (lần đầu), khóa màn hình ngang, bật chế độ toàn màn hình, đặt số phiên bản, đồng bộ và build bằng Gradle. Lần build đầu tiên sẽ lâu vài phút vì Gradle phải tải thư viện.
+File APK nằm trong thư mục `apk-output\`. Script lo hết các bước: cài thư viện, build code, tạo project Android (lần đầu), khóa màn hình ngang, bật chế độ toàn màn hình, đặt số phiên bản, chép icon app, đồng bộ và build bằng Gradle. Lần build đầu tiên sẽ lâu vài phút vì Gradle phải tải thư viện.
 
 Số phiên bản của app lấy theo `version` trong `package.json`. Ra bản mới thì đổi bằng `npm version 0.1.2 --no-git-tag-version` (sửa cả `package.json` lẫn `package-lock.json`). Script ghi số này vào project Android: `versionName` là chính số đó (hiện trong phần cài đặt của Android), `versionCode` = X×10000 + Y×100 + Z (ví dụ 0.1.1 → 101), luôn tăng như Google Play yêu cầu.
 
@@ -60,7 +60,7 @@ Trước khi phát hành, nên làm thêm:
 - Khóa màn hình ngang: trong `android/app/src/main/AndroidManifest.xml`, đặt `android:screenOrientation="userLandscape"` cho thẻ `<activity>` (xoay được giữa hai chiều ngang, theo nút khóa xoay của người dùng), và `android:appCategory="game"` cho thẻ `<application>`. Thiếu dòng sau thì trên Android 16 máy tính bảng (vd Galaxy Tab A11) bỏ qua khóa ngang, vì app target API 36 chỉ được giữ hướng màn hình trên màn hình rộng nếu là game. `build-apk.bat` tự làm bước này.
 - Toàn màn hình: `SystemBars.hidden` trong `capacitor.config.ts` ẩn thanh trạng thái và thanh điều hướng lúc mở app, nhưng vuốt từ mép màn hình là chúng hiện lại luôn. `build-apk.bat` ghi thêm vào `MainActivity.java` để vuốt chỉ hiện tạm rồi tự ẩn (chế độ immersive). Build thủ công thì chép phần `MainActivity` trong `build-apk.ps1` sang.
 - Số phiên bản: đặt `versionName` và `versionCode` trong `android/app/build.gradle` khớp với `version` của `package.json` (xem ở trên). `build-apk.bat` tự làm bước này.
-- Thay icon và splash: dùng gói `@capacitor/assets` để sinh tự động từ một ảnh gốc.
+- Icon app: chép thư mục `resources/android/res/` đè lên `android/app/src/main/res/` (xem "Icon app và favicon" ở mục Tùy chỉnh nhanh). `build-apk.bat` tự làm bước này. Màn hình chờ (splash) vẫn là của Capacitor; có thể sinh bằng gói `@capacitor/assets`.
 - Build bản phát hành: trong Android Studio chọn *Build → Generate Signed App Bundle / APK*. Google Play yêu cầu định dạng AAB.
 
 ## Đưa lên web (Cloudflare Pages)
@@ -199,6 +199,10 @@ src/
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua; cả trận đấu online
 database.rules.json     Quy tắc bảo mật của Realtime Database cho phòng chờ đấu online (dán vào Firebase Console)
 public/_headers         Header bảo mật (CSP...) cho bản web trên Cloudflare Pages, Vite chép vào dist/
+public/favicon.*        Favicon và apple-touch-icon của bản web (tạo bằng npm run icons)
+resources/icon/         Hình gốc của icon app: lớp nền và lớp hình (SVG)
+resources/android/res/  Icon Android đã xuất, build-apk.bat chép vào project Android
+scripts/icons.mjs       npm run icons: xuất icon Android, ảnh cho Google Play và favicon từ resources/icon/
 docs/security.md        Rà soát bảo mật bản web: những gì đã sửa và các vấn đề còn lại
 ```
 
@@ -227,6 +231,9 @@ Mọi đường đi tối đa 2 lần rẽ đều có dạng `a → p → q → 
 - **Độ khó, số màn:** sửa mảng `LEVELS` trong `src/game/levels.ts`. Lưu ý `rows * cols` phải là số chẵn, bàn nên rộng hơn cao (`cols > rows`), và `types` không vượt quá 40. `npm test` tự kiểm tra các điều kiện này và chơi thử hết mọi màn.
 - **Điểm, số lượt gợi ý/đảo, thưởng thời gian:** các hằng số đầu file `GameScene.ts` và `src/game/scoring.ts`. Tăng điểm mà vượt `MAX_SCORE_PER_STAGE` thì `npm test` báo lỗi: nâng giới hạn ở cả `scoring.ts` lẫn `firestore.rules`.
 - **Màu sắc giao diện:** đối tượng `C` trong `src/scenes/ui.ts`.
+- **Icon app và favicon:** hình gốc là hai lớp SVG, `resources/icon/background.svg` (nền) và `resources/icon/foreground.svg` (một góc bàn chơi với cặp táo được nối). Sửa xong thì chạy `npm run icons` và commit cả các file xuất ra.
+  - Hai lớp vẽ trên khung 108dp của adaptive icon Android: phần hiện ra trên màn hình là vùng 0..100 trong viewBox. Launcher cắt icon thành hình tròn, bo góc hay giọt nước tùy hãng, nên giữ hình chính trong vòng tròn bán kính khoảng 46 quanh tâm (50, 50).
+  - `npm run icons` xuất: icon Android cho mọi mật độ màn hình (`resources/android/res/`, gồm cả bản cắt sẵn cho Android 7), ảnh 512x512 để tải lên Google Play (`resources/play-store-icon.png`), và favicon cho bản web (`public/favicon.svg`, `favicon.ico`, `apple-touch-icon.png`).
 - **Thêm bộ hình ô bằng ảnh:** tạo thư mục `src/assets/tiles/<tên bộ>/` và đặt vào đó ít nhất 40 ảnh `.png`, `.webp`, `.jpg`, `.jpeg` hoặc `.svg` (đuôi file viết thường). Chạy lại `npm run dev` (hoặc build), bộ mới hiện trong màn "Hình ô" với tên là tên thư mục.
   - Ảnh xếp theo tên file, phần số so theo giá trị (`2.png` trước `10.png`): ảnh đầu tiên là loại 1. Màn 1 chỉ dùng 12 loại đầu, nên đặt những hình khác nhau rõ nhất lên trước.
   - Ảnh nên có nền trong suốt. Phần viền trong suốt được tự cắt bỏ rồi phóng hình cho vừa ô, nên sprite nhỏ nằm giữa khung rộng vẫn đủ to. Ảnh nhỏ (như sprite pixel art 64x64) được phóng giữ nguyên từng điểm ảnh nên không bị nhòe. Thư mục có ít hơn 40 ảnh bị bỏ qua (có cảnh báo trong console).

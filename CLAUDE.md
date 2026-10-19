@@ -19,6 +19,7 @@ npx vitest run src/game/Board.test.ts        # a single test file
 npx vitest run -t "findPath"                 # tests whose name matches
 npm run build                                # tsc (type-check only, noEmit) + vite build -> dist/
 npx tsc                                      # type-check only
+npm run icons                                # re-render the app icon and favicons from resources/icon/*.svg
 ```
 
 There is no linter configured.
@@ -43,10 +44,17 @@ Online PvP additionally needs `VITE_FIREBASE_DATABASE_URL` (a Realtime Database,
   - It also sets `android:appCategory="game"` on `<application>`. Android 16 ignores `screenOrientation` (and `setRequestedOrientation`) on displays with smallest width >= 600dp, such as the Galaxy Tab A11, for apps targeting API 36 (Capacitor 8's `targetSdkVersion`). Games are exempt. Don't swap it for the `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` opt-out, which stops working at API 37.
   - Every run also rewrites `MainActivity.java` (keeping its `package` line) so the system bars stay hidden in immersive mode: a swipe from the edge shows them only briefly over the game, and they are hidden again whenever the window regains focus. `SystemBars.hidden: true` in `capacitor.config.ts` hides them at startup; keep it, or the SystemBars plugin shows the bars again on load.
   - Capacitor's activity declares `configChanges="orientation|screenSize|..."`, so size changes (split screen, flipping between the two landscape directions) resize the WebView instead of recreating the activity.
+  - Every run also copies `resources/android/res/` over `android/app/src/main/res/`, replacing Capacitor's default launcher icon (see "App icon" below).
   - Every run also copies the `version` from `package.json` into `android/app/build.gradle`. `versionName` becomes that version, and `versionCode` becomes `X*10000 + Y*100 + Z`, which must keep increasing for Google Play. The script fails unless the version is plain `X.Y.Z` with Y and Z below 100. Bump it with `npm version X.Y.Z --no-git-tag-version`, which updates `package.json` and `package-lock.json`.
   - It writes the APK to `apk-output/Pairfect-v<package.json version>-<debug|release>.apk`.
   - The release keystore defaults to `%USERPROFILE%\.android-keystores\pairfect-release.jks`, outside the repo.
-- Manual flow: `npm run android:sync` (build + `cap sync`), then `npm run android:open`.
+- Manual flow: `npm run android:sync` (build + `cap sync`), then `npm run android:open`. This skips the script's steps, including the icon copy.
+- **App icon.** The source is two SVG layers on the 108dp adaptive-icon canvas: `resources/icon/background.svg` (the game's teal, as a gradient) and `resources/icon/foreground.svg` (a 3×3 corner of a board, with a selected apple pair joined by a 2-turn path). Both use `viewBox="-25 -25 150 150"`, so the area a launcher shows is `0..100`. Keep the artwork inside a circle of radius ~46 around (50, 50), because launchers mask the icon to a circle, squircle or teardrop.
+  - `npm run icons` (`scripts/icons.mjs`, rendered with the `@resvg/resvg-js` devDependency) writes everything derived from them, and the outputs are committed:
+    - `resources/android/res/`: per-density mipmaps (`ic_launcher_background` / `_foreground` for the adaptive icon, plus pre-masked `ic_launcher` / `ic_launcher_round` for Android 7) and `mipmap-anydpi-v26/ic_launcher*.xml`.
+    - `resources/play-store-icon.png` (512×512) for the Play Console.
+    - `public/favicon.svg`, `public/favicon.ico` (16/32/48) and `public/apple-touch-icon.png` (180, opaque) for the web build. `index.html` links them with root-absolute paths, which Vite rewrites to `./` because of `base: './'`.
+  - Rerun it after editing either SVG; nothing regenerates the outputs automatically.
 - `android/`, `dist/` and `apk-output/` are generated and gitignored. Do not hand-edit `android/`; change `capacitor.config.ts` or the build script instead.
 - `appId` in `capacitor.config.ts` is still the placeholder `com.example.pairfect`. It must change before the first real release because it is permanent on Google Play.
 

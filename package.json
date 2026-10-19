@@ -7,6 +7,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "icons": "node scripts/icons.mjs",
     "android:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android"
   },
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",
+    "@resvg/resvg-js": "^2.6.2",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"

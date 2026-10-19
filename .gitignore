@@ -1,6 +1,7 @@
 node_modules/
 dist/
-android/
+# Chỉ project Android do Capacitor tạo; resources/android/ (icon app) vẫn được commit
+/android/
 apk-output/
 # Dữ liệu cục bộ của `npx wrangler pages dev dist` (thử bản web với header của Cloudflare)
 .wrangler/

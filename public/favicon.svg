@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><clipPath id="clip"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#clip)">
+  
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#33718e"/>
+      <stop offset="1" stop-color="#1b3545"/>
+    </linearGradient>
+  </defs>
+  <rect x="-25" y="-25" width="150" height="150" fill="url(#bg)"/>
+
+  
+  <defs>
+    <symbol id="apple" viewBox="-12 -13 24 25">
+      <path d="M0,-5 C-3,-8.5 -10.5,-8.5 -10.5,-1 C-10.5,6 -6,11 -3,11 C-1.6,11 -1,10.2 0,10.2 C1,10.2 1.6,11 3,11 C6,11 10.5,6 10.5,-1 C10.5,-8.5 3,-8.5 0,-5 Z" fill="#e8505b"/>
+      <ellipse cx="-5.2" cy="-1.5" rx="1.8" ry="3.2" fill="#fff" opacity=".45" transform="rotate(15 -5.2 -1.5)"/>
+      <path d="M0,-5 Q0.4,-8.8 2.2,-11" fill="none" stroke="#7a4a2a" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M1.8,-8.4 C3.8,-12.4 8.4,-12 9.6,-10.4 C7,-7.8 4,-7.6 1.8,-8.4 Z" fill="#4cb860"/>
+    </symbol>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+    
+    <symbol id="tile" viewBox="0 0 17 22">
+      <rect y="3" width="17" height="19" rx="4.5" fill="#c9b79c"/>
+      <rect width="17" height="19" rx="4.5" fill="#fffaf0"/>
+    </symbol>
+  </defs>
+
+  
+  <path d="M36 25 H50 V72 H64" fill="none" stroke="#ffe066" stroke-opacity=".6" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M36 25 H50 V72 H64" fill="none" stroke="#ffe066" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+
+  
+  <g transform="translate(21 15.5)">
+    <rect x="-1.8" y="-1.8" width="20.6" height="25.6" rx="6" fill="#ffc857"/>
+    <use href="#tile" width="17" height="22"/>
+    <use href="#apple" x="2" y="2.5" width="13" height="14"/>
+  </g>
+  <g transform="translate(21 39)">
+    <use href="#tile" width="17" height="22"/>
+    <path d="M8.5 4.2 L13.6 14 H3.4 Z" fill="#2a9d8f" stroke="#2a9d8f" stroke-width="1.4" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(21 62.5)">
+    <use href="#tile" width="17" height="22"/>
+    <rect x="3.6" y="4.6" width="9.8" height="9.8" rx="2" fill="#f4a259"/>
+  </g>
+
+  
+  <g transform="translate(62 15.5)">
+    <use href="#tile" width="17" height="22"/>
+    <circle cx="8.5" cy="9.5" r="5.2" fill="#3a86ff"/>
+  </g>
+  <g transform="translate(62 39)">
+    <use href="#tile" width="17" height="22"/>
+    <path d="M8.5 3.6 L14 9.5 L8.5 15.4 L3 9.5 Z" fill="#8e5ad8"/>
+  </g>
+  <g transform="translate(62 62.5)">
+    <rect x="-1.8" y="-1.8" width="20.6" height="25.6" rx="6" fill="#ffc857"/>
+    <use href="#tile" width="17" height="22"/>
+    <use href="#apple" x="2" y="2.5" width="13" height="14"/>
+  </g>
+</g></svg>

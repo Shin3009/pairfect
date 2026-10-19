@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="-25 -25 150 150">
+  <!-- Lớp hình của icon app (xem scripts/icons.mjs): một góc bàn chơi 3x3, cặp táo ở hai góc chéo được chọn
+       (viền vàng) và nối bằng đường quẹo 2 lần qua cột giữa đã trống.
+       Khung 108dp của adaptive icon; phần hiện ra là 0..100, và mọi hình nằm trong vòng tròn an toàn
+       (bán kính ~46 quanh 50,50) để không bị cắt khi launcher bo icon thành hình tròn. -->
+  <defs>
+    <symbol id="apple" viewBox="-12 -13 24 25">
+      <path d="M0,-5 C-3,-8.5 -10.5,-8.5 -10.5,-1 C-10.5,6 -6,11 -3,11 C-1.6,11 -1,10.2 0,10.2 C1,10.2 1.6,11 3,11 C6,11 10.5,6 10.5,-1 C10.5,-8.5 3,-8.5 0,-5 Z" fill="#e8505b"/>
+      <ellipse cx="-5.2" cy="-1.5" rx="1.8" ry="3.2" fill="#fff" opacity=".45" transform="rotate(15 -5.2 -1.5)"/>
+      <path d="M0,-5 Q0.4,-8.8 2.2,-11" fill="none" stroke="#7a4a2a" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M1.8,-8.4 C3.8,-12.4 8.4,-12 9.6,-10.4 C7,-7.8 4,-7.6 1.8,-8.4 Z" fill="#4cb860"/>
+    </symbol>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+    <!-- Nền ô giống trong game (tileArt.ts): mặt kem, cạnh dưới đậm hơn -->
+    <symbol id="tile" viewBox="0 0 17 22">
+      <rect y="3" width="17" height="19" rx="4.5" fill="#c9b79c"/>
+      <rect width="17" height="19" rx="4.5" fill="#fffaf0"/>
+    </symbol>
+  </defs>
+
+  <!-- Đường nối có quầng sáng, vẽ trước để hai đầu nằm dưới ô -->
+  <path d="M36 25 H50 V72 H64" fill="none" stroke="#ffe066" stroke-opacity=".6" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M36 25 H50 V72 H64" fill="none" stroke="#ffe066" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Cột trái -->
+  <g transform="translate(21 15.5)">
+    <rect x="-1.8" y="-1.8" width="20.6" height="25.6" rx="6" fill="#ffc857"/>
+    <use href="#tile" width="17" height="22"/>
+    <use href="#apple" x="2" y="2.5" width="13" height="14"/>
+  </g>
+  <g transform="translate(21 39)">
+    <use href="#tile" width="17" height="22"/>
+    <path d="M8.5 4.2 L13.6 14 H3.4 Z" fill="#2a9d8f" stroke="#2a9d8f" stroke-width="1.4" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(21 62.5)">
+    <use href="#tile" width="17" height="22"/>
+    <rect x="3.6" y="4.6" width="9.8" height="9.8" rx="2" fill="#f4a259"/>
+  </g>
+
+  <!-- Cột phải -->
+  <g transform="translate(62 15.5)">
+    <use href="#tile" width="17" height="22"/>
+    <circle cx="8.5" cy="9.5" r="5.2" fill="#3a86ff"/>
+  </g>
+  <g transform="translate(62 39)">
+    <use href="#tile" width="17" height="22"/>
+    <path d="M8.5 3.6 L14 9.5 L8.5 15.4 L3 9.5 Z" fill="#8e5ad8"/>
+  </g>
+  <g transform="translate(62 62.5)">
+    <rect x="-1.8" y="-1.8" width="20.6" height="25.6" rx="6" fill="#ffc857"/>
+    <use href="#tile" width="17" height="22"/>
+    <use href="#apple" x="2" y="2.5" width="13" height="14"/>
+  </g>
+</svg>
