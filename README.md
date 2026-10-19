@@ -177,10 +177,10 @@ src/
     imagePacks.test.ts  Unit test cho việc gom và xếp thứ tự ảnh
   assets/tiles/         Các bộ hình ô bằng ảnh: Quái vật (SVG vẽ riêng), Tuxemon (pixel art CC BY-SA 4.0, kèm credits.txt)
   audio/                Âm thanh tạo bằng code (Web Audio, không có file): ba bộ Gỗ & chuông, Bong bóng, 8-bit
-    sets.ts             Tiếng cho từng sự kiện, tiếng bị tấn công và nhạc nền của ba bộ (số liệu theo bản mẫu trong docs/superpowers/specs)
+    sets.ts             Tiếng cho từng sự kiện (cả bấm nút, đếm ngược, sắp hết giờ, đá vỡ, gửi đòn), tiếng bị tấn công, nhạc trong màn và nhạc menu của ba bộ (số liệu theo bản mẫu trong docs/superpowers/specs)
     voices.ts           Các nốt và nhạc cụ cơ bản (marimba, chuông, tiếng gõ gỗ)
-    rules.ts            Nốt cao dần theo chuỗi, nút loa tắt / trả lại tiếng
-    music.ts            Phát nhạc nền lặp, không phát lại từ đầu khi chuyển màn, không phát dồn sau khi app bị ẩn
+    rules.ts            Nốt cao dần theo chuỗi, nút loa tắt / trả lại tiếng, báo thanh giờ chuyển đỏ và tích 10 giây cuối
+    music.ts            Phát nhạc nền lặp (nhạc trong màn hay nhạc menu), không phát lại từ đầu khi chuyển màn, không phát dồn sau khi app bị ẩn
     synth.ts            Phát âm thật bằng Web Audio
     sound.ts            Dùng chung cho các scene: phát hiệu ứng, bật / tắt nhạc theo cài đặt
     *.test.ts           Unit test cho dữ liệu các bộ, luật và bộ phát nhạc

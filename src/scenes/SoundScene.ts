@@ -85,7 +85,8 @@ export class SoundScene extends Phaser.Scene {
     this.redraw();
 
     new Button(this, x, 652, 320, 76, 'Quay lại', () => this.back(), 1, 30);
-    startMusic();
+    // Nhạc trong màn chơi của bộ đang chọn, để nghe thử
+    startMusic('game');
   }
 
   private choose(id: SoundSetId): void {

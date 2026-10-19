@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { startMusic } from '../audio/sound';
 import { saveTileArt } from '../game/storage';
 import { artTexture, selectedTileArt, TILE_ARTS, type TileArt } from '../game/tileArt';
 import { onBack } from '../native';
@@ -37,6 +38,8 @@ export class TileArtScene extends Phaser.Scene {
     this.cards = [];
     this.closeCredits = null;
     this.cameras.main.setBackgroundColor(C.bg).fadeIn(250, 31, 59, 77);
+    // Nhạc menu chạy liền qua các màn menu (xem audio/sound.ts)
+    startMusic('menu');
     onGameResize(this, () => this.scene.restart());
     // Nút Back của Android: đóng hộp ghi công nếu đang mở, không thì về menu
     onBack(this, () => (this.closeCredits ? this.hideCredits() : this.back()));

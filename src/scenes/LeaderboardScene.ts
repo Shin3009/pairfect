@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { startMusic } from '../audio/sound';
 import { LEADERBOARD_SIZE, loadBest, loadLeaderboard } from '../game/storage';
 import { onBack } from '../native';
 import { fetchOnlineBoard, onlineEnabled, type OnlineBoard } from '../online';
@@ -100,6 +101,8 @@ export class LeaderboardScene extends Phaser.Scene {
     }
     this.keepOnline = false;
     this.cameras.main.setBackgroundColor(C.bg).fadeIn(250, 31, 59, 77);
+    // Nhạc menu chạy liền qua các màn menu (xem audio/sound.ts)
+    startMusic('menu');
     onGameResize(this, () => {
       this.keepOnline = true;
       this.scene.restart();

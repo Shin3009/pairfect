@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { audible } from '../audio/rules';
-import { soundSettings, stopMusic } from '../audio/sound';
+import { soundSettings, startMusic } from '../audio/sound';
 import { HARD_START } from '../game/levels';
 import { loadBest, loadPlayerName, loadSavedGame, type SavedGame } from '../game/storage';
 import { createTileTextures, MAX_TYPES, TEXTURE_SIZE, tileKey } from '../game/tileArt';
@@ -41,8 +41,8 @@ export class MenuScene extends Phaser.Scene {
   create(): void {
     this.dialog = null;
     this.chip = [];
-    // Về menu từ màn chơi hay màn chọn âm thanh: tắt dần nhạc nền
-    stopMusic();
+    // Nhạc menu, chạy liền qua bảng xếp hạng, màn chọn hình ô và sảnh đấu online; từ màn chơi về thì đổi từ nhạc trong màn
+    startMusic('menu');
     createTileTextures(this);
     this.cameras.main.setBackgroundColor(C.bg).fadeIn(250, 31, 59, 77);
     onGameResize(this, () => this.scene.restart());

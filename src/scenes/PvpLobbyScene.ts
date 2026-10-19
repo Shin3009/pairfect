@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { startMusic } from '../audio/sound';
 import { loadPlayerName } from '../game/storage';
 import { onBack } from '../native';
 import { COMBO_STEP } from '../pvp/attacks';
@@ -35,6 +36,8 @@ export class PvpLobbyScene extends Phaser.Scene {
     this.session = null;
     this.objects = [];
     this.cameras.main.setBackgroundColor(C.bg).fadeIn(250, 31, 59, 77);
+    // Nhạc menu chạy liền qua các màn menu (xem audio/sound.ts)
+    startMusic('menu');
     onGameResize(this, () => this.render());
     onBack(this, () => this.back());
     this.render();

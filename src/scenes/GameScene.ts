@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { audible, nextCombo, pitchStep } from '../audio/rules';
+import { audible, LOW_TIME_RATIO, nextCombo, pitchStep, timeCues } from '../audio/rules';
 import { playHit, playSfx, soundSettings, startMusic, stopMusic, toggleMute } from '../audio/sound';
 import { Board, same, STONE, type Gravity, type Move, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
@@ -58,6 +58,8 @@ const SHUFFLES_PER_LEVEL = 3;
 const RETRIES_PER_RUN = 3;
 // Điểm mỗi cặp và điểm thưởng thời gian nằm trong game/scoring.ts (firestore.rules dựa vào chúng)
 const TIME_BONUS_PER_PAIR = 1; // giây cộng thêm mỗi lần ăn cặp
+/** Tiếng đá vỡ và tiếng gửi đòn phát sau tiếng chính (đảo bàn, nối cặp) chừng này giây. */
+const FOLLOW_UP_SOUND_DELAY = 0.12;
 /**
  * Khoảng lưu màn đang chơi dở, ngoài các lần lưu khi vào màn, tạm dừng (cả khi app xuống nền), thắng, thua.
  * App bị tắt ngang (lỗi, hết pin) thì mất tối đa chừng này thời gian chơi.
@@ -177,6 +179,10 @@ export class GameScene extends Phaser.Scene {
   private comboAt: number | null = null;
   /** Đấu online: đã phát tiếng thắng / thua của trận này (hộp kết quả mở lại nhiều lần). */
   private resultSounded = false;
+  /** Đấu online: số đếm ngược vừa phát tiếng, để vẽ lại (đổi kích thước màn hình) không kêu lại. */
+  private lastCount: number | null = null;
+  /** Đã báo thanh giờ chuyển đỏ trong màn / trận này (xem audio/rules.timeCues). */
+  private warned = false;
 
   /**
    * Đấu online: phiên và trận đang chơi; null khi chơi một mình. Bàn của trận (match.me.board) chính là this.board,
@@ -242,6 +248,8 @@ export class GameScene extends Phaser.Scene {
     this.combo = 0;
     this.comboAt = null;
     this.resultSounded = false;
+    this.lastCount = null;
+    this.warned = false;
     this.hud = [];
     this.dialog = null;
   }
@@ -277,6 +285,8 @@ export class GameScene extends Phaser.Scene {
     this.time.addEvent({ delay: 100, loop: true, callback: () => this.tick(0.1) });
     onGameResize(this, () => this.relayout());
     if (this.match) {
+      // Im trong lúc đếm ngược để nghe rõ tiếng đếm; nhạc bắt đầu lúc "Bắt đầu!" (xem tickPvp)
+      stopMusic();
       this.startPvp(this.pvp!, this.match);
       return;
     }
@@ -299,8 +309,10 @@ export class GameScene extends Phaser.Scene {
       this.loseLevel(play.lost, true);
       return;
     }
-    // Sang màn sau hay chơi lại màn thì nhạc đang phát chạy tiếp (xem audio/sound.ts)
-    startMusic();
+    // Vào màn (chơi tiếp từ bản lưu) khi thanh giờ đã đỏ thì không báo nữa
+    this.warned = this.timeLeft <= this.cfg.time * LOW_TIME_RATIO;
+    // Sang màn sau thì nhạc đang phát chạy tiếp; từ menu vào thì đổi từ nhạc menu sang (xem audio/sound.ts)
+    startMusic('game');
     // Bản lưu có thể rơi đúng lúc bàn vừa dọn sạch hay vừa bế tắc, trước khi kịp qua màn / tự đảo bàn
     if (play) this.checkBoard();
     this.saveProgress();
@@ -521,7 +533,7 @@ export class GameScene extends Phaser.Scene {
     this.timeBar.fillStyle(0x163040, 1).fillRoundedRect(x, y, w, h, 6);
     if (ratio > 0) {
       this.timeBar
-        .fillStyle(ratio > 0.25 ? C.timeOk : C.timeLow, 1)
+        .fillStyle(ratio > LOW_TIME_RATIO ? C.timeOk : C.timeLow, 1)
         .fillRoundedRect(x, y, Math.max(h, w * ratio), h, 6);
     }
   }
@@ -597,11 +609,13 @@ export class GameScene extends Phaser.Scene {
     // Cập nhật logic + dồn ô. Đấu online: qua Match, để nước đi được gửi cho đối thủ (kèm đòn nếu thành chuỗi)
     let moves: Move[];
     let combo: number;
+    let attack: AttackKind | null = null;
     if (this.match) {
       const played = this.match.play(a, b);
       if (!played) return;
       moves = played.moves;
       combo = played.combo;
+      attack = played.attack;
       this.showCombo(played.combo, played.attack);
     } else {
       moves = this.board.remove(a, b, gravityFor(this.cfg.gravity, this.matches));
@@ -610,8 +624,9 @@ export class GameScene extends Phaser.Scene {
       this.comboAt = now;
     }
     this.matches++;
-    // Ăn cặp liên tiếp thật nhanh thì tiếng nối cặp cao dần
+    // Ăn cặp liên tiếp thật nhanh thì tiếng nối cặp cao dần; chuỗi đủ dài để tung đòn thì thêm tiếng gửi đòn
     playSfx('match', pitchStep(combo));
+    if (attack) playSfx('launch', 0, FOLLOW_UP_SOUND_DELAY);
 
     this.select(null);
     this.setHint(null);
@@ -728,6 +743,7 @@ export class GameScene extends Phaser.Scene {
     const broken = this.match ? this.match.shuffle(auto) : this.board.shuffle();
     if (!broken) return;
     playSfx('shuffle');
+    if (broken.length) playSfx('crack', 0, FOLLOW_UP_SOUND_DELAY);
     if (!auto || !this.match) this.shuffles--;
     this.select(null);
     this.setHint(null);
@@ -785,9 +801,21 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.ended) return;
+    const prev = this.timeLeft;
     this.timeLeft -= dt;
+    this.timeCue(prev);
     this.drawTimeBar();
     if (this.timeLeft <= 0) this.loseLevel('time');
+  }
+
+  /** Tiếng báo giờ sau một bước đồng hồ: thanh giờ vừa chuyển đỏ, tích mỗi giây trong 10 giây cuối (xem audio/rules). */
+  private timeCue(prev: number): void {
+    const cue = timeCues(prev, this.timeLeft, this.cfg.time, this.warned);
+    if (cue.warn) {
+      this.warned = true;
+      playSfx('warn');
+    }
+    if (cue.tick) playSfx('tick', cue.tick === 'urgent' ? 1 : 0);
   }
 
   private winLevel(): void {
@@ -931,10 +959,15 @@ export class GameScene extends Phaser.Scene {
       this.countdownText = null;
       this.createTiles();
       this.toast('Bắt đầu!');
-      // Trận có thể đã xong ngay trong lúc đếm ngược (đầu hàng, đối thủ rời đi): khi đó không bật nhạc dưới hộp kết quả
-      if (!m.outcome) startMusic();
+      // Trận có thể đã xong ngay trong lúc đếm ngược (đầu hàng, đối thủ rời đi): khi đó không kêu, không bật nhạc
+      if (!m.outcome) {
+        playSfx('go');
+        startMusic('game');
+      }
     }
+    const prev = this.timeLeft;
     this.timeLeft = m.timeLeft();
+    if (!this.ended && !m.outcome) this.timeCue(prev);
     this.drawTimeBar();
     if (this.fogCover.length && Date.now() >= this.fogUntil) this.drawFog();
     if (m.timeLeft() <= 0) this.waitForResult();
@@ -967,6 +1000,7 @@ export class GameScene extends Phaser.Scene {
       case 'shuffle':
         this.syncTextures();
         this.breakStones(e.broken);
+        if (e.broken.length) playSfx('crack', 0, FOLLOW_UP_SOUND_DELAY);
         break;
     }
     this.toast(ATTACK_TAKEN[e.kind](this.pvp?.oppName ?? 'Đối thủ'));
@@ -1003,7 +1037,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateCountdown(): void {
-    if (this.match && this.countdownText) this.countdownText.setText(String(Math.max(1, Math.ceil(-this.match.elapsed() / 1000))));
+    if (!this.match || !this.countdownText) return;
+    const n = Math.max(1, Math.ceil(-this.match.elapsed() / 1000));
+    this.countdownText.setText(String(n));
+    // Mỗi số mới một tiếng, kể cả số đầu tiên; vẽ lại khi đổi kích thước màn hình thì không kêu lại
+    if (n !== this.lastCount && !this.match.outcome) playSfx('count');
+    this.lastCount = n;
   }
 
   /** Mình đã dọn xong hoặc hết giờ: thôi thao tác, chờ Match báo kết quả (thường chỉ khoảng một giây). */
