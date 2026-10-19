@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { loadSoundSettings, saveSoundSettings, type SoundSettings } from '../game/storage';
 import type { AttackKind } from '../pvp/attacks';
-import { MusicPlayer } from './music';
+import { MusicPlayer, type MusicKind } from './music';
 import { muteToggled, type SoundSwitches } from './rules';
 import { SOUND_SETS, type SfxName } from './sets';
 import { Synth } from './synth';
@@ -19,8 +19,8 @@ let ctx: AudioContext | null = null;
 let synth: Synth | null = null;
 let player: MusicPlayer | null = null;
 let settings: SoundSettings | null = null;
-/** Scene đang muốn có nhạc (màn chơi, màn chọn âm thanh); nhạc chỉ phát khi cờ này bật và cài đặt cho phép. */
-let wanted = false;
+/** Bản nhạc scene đang muốn (trong màn chơi hay ở menu), null là im; nhạc chỉ phát khi cài đặt cho phép. */
+let wanted: MusicKind | null = null;
 /** Trạng thái trước lần bấm nút loa gần nhất, để bấm lại thì trả về như cũ. Không lưu. */
 let remembered: SoundSwitches | null = null;
 
@@ -30,7 +30,7 @@ function current(): SoundSettings {
 
 function syncMusic(): void {
   const s = current();
-  player?.play(wanted && s.music ? s.set : null);
+  player?.play(wanted && s.music ? { set: s.set, kind: wanted } : null);
 }
 
 /** Gọi một lần trong main.ts, ngay sau khi tạo game (Phaser tạo game.sound trong constructor). */
@@ -78,10 +78,13 @@ function sfxTime(): number | null {
   return ctx.currentTime + 0.01;
 }
 
-/** Phát một hiệu ứng của bộ đang chọn; `step` là bậc cao độ của tiếng nối cặp (xem rules.pitchStep). */
-export function playSfx(name: SfxName, step = 0): void {
+/**
+ * Phát một hiệu ứng của bộ đang chọn, sau `delay` giây (theo đồng hồ âm thanh). `step` là bậc cao độ của tiếng nối cặp
+ * (xem rules.pitchStep), hoặc 1 cho tiếng tích gấp của 3 giây cuối.
+ */
+export function playSfx(name: SfxName, step = 0, delay = 0): void {
   const t = sfxTime();
-  if (t !== null) SOUND_SETS[current().set].sfx[name](synth!, t, step);
+  if (t !== null) SOUND_SETS[current().set].sfx[name](synth!, t + delay, step);
 }
 
 /** Tiếng bị đối thủ tấn công khi đấu online. */
@@ -90,14 +93,17 @@ export function playHit(kind: AttackKind): void {
   if (t !== null) SOUND_SETS[current().set].hit[kind](synth!, t);
 }
 
-/** Scene muốn có nhạc nền. Nhạc đang phát đúng bộ thì chạy tiếp, không phát lại từ đầu. */
-export function startMusic(): void {
-  wanted = true;
+/**
+ * Scene muốn có nhạc nền: bản trong màn chơi (`game`) hay bản ở menu (`menu`) của bộ đang chọn.
+ * Đang phát đúng bản đó thì chạy tiếp, không phát lại từ đầu; bản khác thì chuyển dần sang.
+ */
+export function startMusic(kind: MusicKind = 'game'): void {
+  wanted = kind;
   syncMusic();
 }
 
 /** Tắt dần nhạc nền. */
 export function stopMusic(): void {
-  wanted = false;
+  wanted = null;
   syncMusic();
 }

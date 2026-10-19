@@ -9,6 +9,15 @@ export const START_DELAY = 0.05;
 export const FADE_IN = 0.6;
 export const FADE_OUT = 0.4;
 
+/** Loại bản nhạc: trong màn chơi, hay ở menu (chậm và thưa hơn). */
+export type MusicKind = 'game' | 'menu';
+
+/** Một bản nhạc: bản `kind` của bộ `set`. */
+export interface Track {
+  set: SoundSetId;
+  kind: MusicKind;
+}
+
 /** Đường ra riêng của một lần phát nhạc: tăng dần lúc bắt đầu, giảm dần rồi tự gỡ lúc dừng. */
 export interface MusicOutput {
   node: AudioNode;
@@ -24,7 +33,7 @@ export interface MusicHost {
 }
 
 interface Playing {
-  set: SoundSetId;
+  track: Track;
   out: MusicOutput;
   /** Nốt móc kép kế tiếp và lúc phát nó. */
   step: number;
@@ -40,21 +49,26 @@ export class MusicPlayer {
 
   constructor(private readonly host: MusicHost) {}
 
-  get current(): SoundSetId | null {
-    return this.playing?.set ?? null;
+  get current(): Track | null {
+    return this.playing?.track ?? null;
   }
 
-  /** Phát nhạc của bộ `set`, hoặc im nếu null. Bộ đang phát thì không làm gì, nên nhạc không bị phát lại từ đầu. */
-  play(set: SoundSetId | null): void {
-    if (set === this.current) return;
+  /**
+   * Phát bản `track`, hoặc im nếu null. Đang phát đúng bản đó (cùng bộ, cùng loại) thì không làm gì,
+   * nên nhạc không bị phát lại từ đầu; bản khác thì tắt dần bản cũ và tăng dần bản mới.
+   */
+  play(track: Track | null): void {
+    const cur = this.current;
+    if (track && cur && track.set === cur.set && track.kind === cur.kind) return;
+    if (!track && !cur) return;
     const now = this.host.now();
     this.playing?.out.fadeOut(now, FADE_OUT);
     this.playing = null;
-    if (!set) return;
+    if (!track) return;
     const out = this.host.createOutput();
     const start = now + START_DELAY;
     out.fadeIn(start, FADE_IN);
-    this.playing = { set, out, step: 0, next: start };
+    this.playing = { track: { set: track.set, kind: track.kind }, out, step: 0, next: start };
     this.pump();
   }
 
@@ -62,7 +76,8 @@ export class MusicPlayer {
     const p = this.playing;
     if (!p) return;
     const now = this.host.now();
-    const { music } = SOUND_SETS[p.set];
+    const set = SOUND_SETS[p.track.set];
+    const music = p.track.kind === 'menu' ? set.menuMusic : set.music;
     const sd = 60 / music.bpm / 4;
     if (p.next < now) p.next = now + START_DELAY;
     while (p.next < now + LOOKAHEAD) {

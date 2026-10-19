@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeVoices } from '../test/fakeVoices';
-import { LOOKAHEAD, MusicPlayer, START_DELAY, type MusicOutput } from './music';
+import { LOOKAHEAD, MusicPlayer, START_DELAY, type MusicOutput, type Track } from './music';
 import { SOUND_SETS } from './sets';
 
 /** Đồng hồ chỉnh tay, Voices giả, và các đầu ra nhạc giả đếm số lần tăng / giảm dần. */
@@ -20,31 +20,61 @@ function setup() {
   return { clock, voices, outputs, player };
 }
 
+const WOOD_GAME: Track = { set: 'wood', kind: 'game' };
+const WOOD_MENU: Track = { set: 'wood', kind: 'menu' };
+const CHIP_GAME: Track = { set: 'chip', kind: 'game' };
+
 afterEach(() => vi.restoreAllMocks());
 
 describe('MusicPlayer', () => {
   it('cùng bộ hai lần chỉ tạo một đầu ra', () => {
     const { outputs, player } = setup();
-    player.play('wood');
-    player.play('wood');
+    player.play(WOOD_GAME);
+    player.play({ ...WOOD_GAME });
     expect(outputs).toHaveLength(1);
     expect(outputs[0].fadeIn).toHaveBeenCalledTimes(1);
-    expect(player.current).toBe('wood');
+    expect(player.current).toEqual(WOOD_GAME);
+  });
+
+  it('cùng bộ cùng loại chỉ tạo một đầu ra', () => {
+    const { outputs, player } = setup();
+    player.play(WOOD_MENU);
+    player.play({ ...WOOD_MENU });
+    expect(outputs).toHaveLength(1);
+    expect(player.current).toEqual(WOOD_MENU);
   });
 
   it('đổi bộ thì tắt dần đầu ra cũ', () => {
     const { outputs, player } = setup();
-    player.play('wood');
-    player.play('chip');
+    player.play(WOOD_GAME);
+    player.play(CHIP_GAME);
     expect(outputs).toHaveLength(2);
     expect(outputs[0].fadeOut).toHaveBeenCalledTimes(1);
     expect(outputs[1].fadeOut).not.toHaveBeenCalled();
-    expect(player.current).toBe('chip');
+    expect(player.current).toEqual(CHIP_GAME);
+  });
+
+  it('đổi loại thì tắt dần bản cũ', () => {
+    const { outputs, player } = setup();
+    player.play(WOOD_MENU);
+    player.play(WOOD_GAME);
+    expect(outputs).toHaveLength(2);
+    expect(outputs[0].fadeOut).toHaveBeenCalledTimes(1);
+    expect(player.current?.kind).toBe('game');
+  });
+
+  it('bản menu phát nhạc menu', () => {
+    const { player } = setup();
+    const menu = vi.spyOn(SOUND_SETS.chip.menuMusic, 'play');
+    const game = vi.spyOn(SOUND_SETS.chip.music, 'play');
+    player.play({ set: 'chip', kind: 'menu' });
+    expect(menu).toHaveBeenCalled();
+    expect(game).not.toHaveBeenCalled();
   });
 
   it('play(null) thì tắt dần và im', () => {
     const { clock, voices, outputs, player } = setup();
-    player.play('bubble');
+    player.play({ set: 'bubble', kind: 'game' });
     player.play(null);
     expect(outputs[0].fadeOut).toHaveBeenCalledTimes(1);
     expect(player.current).toBeNull();
@@ -57,7 +87,7 @@ describe('MusicPlayer', () => {
   it('xếp lịch tới đúng tầm nhìn trước', () => {
     const { clock, voices, player } = setup();
     // Nhạc 8-bit có nốt ở mọi nốt móc kép (hợp âm rải), nên lần pump nào cũng thêm lời gọi
-    player.play('chip');
+    player.play(CHIP_GAME);
     expect(voices.calls.length).toBeGreaterThan(0);
     expect(voices.calls.every((c) => c.t < LOOKAHEAD + 1e-9)).toBe(true);
     const before = voices.calls.length;
@@ -71,7 +101,7 @@ describe('MusicPlayer', () => {
   it('đồng hồ nhảy xa thì không phát dồn', () => {
     const { clock, voices, player } = setup();
     const play = vi.spyOn(SOUND_SETS.chip.music, 'play');
-    player.play('chip');
+    player.play(CHIP_GAME);
     const sd = 60 / SOUND_SETS.chip.music.bpm / 4;
     const steps = play.mock.calls.length;
     const before = voices.calls.length;
