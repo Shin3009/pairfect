@@ -183,6 +183,7 @@ src/
     music.ts            Phát nhạc nền lặp (nhạc trong màn hay nhạc menu), không phát lại từ đầu khi chuyển màn, không phát dồn sau khi app bị ẩn
     synth.ts            Phát âm thật bằng Web Audio
     sound.ts            Dùng chung cho các scene: phát hiệu ứng, bật / tắt nhạc theo cài đặt
+    unlock.ts           Mở khóa âm thanh ở lần chạm / bấm phím đầu tiên ở bất kỳ đâu, kể cả hộp nhập tên
     *.test.ts           Unit test cho dữ liệu các bộ, luật và bộ phát nhạc
   pvp/                  Đấu online (xem mục Đấu online)
     protocol.ts         Tin nhắn giữa hai máy (kiểm tra đúng dạng), mã phòng, thông báo lỗi
@@ -254,7 +255,6 @@ Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset
 
 ## Gợi ý phát triển tiếp
 
-- Âm thanh khi chọn, khi nối, khi qua màn (`this.load.audio` + `this.sound.play`).
 - Rung khi nối thành công: plugin `@capacitor/haptics`.
 - Quảng cáo / mua trong ứng dụng: các plugin cộng đồng của Capacitor cho AdMob và Google Play Billing.
 - Chặn điểm giả và việc dùng hết hạn mức Firebase / Metered: xem các vấn đề còn lại trong [`docs/security.md`](docs/security.md) (kiểm tra điểm phía máy chủ, Firebase App Check, dọn phòng cũ, cấp credential TURN ngắn hạn).
