@@ -94,6 +94,20 @@ describe('các bộ âm thanh', () => {
     ]);
   });
 
+  it('đòn đảo bàn: tiếng xáo bắt đầu đúng ở shuffleHitRattle', () => {
+    for (const id of SOUND_SET_IDS) {
+      const set = SOUND_SETS[id];
+      const hit = new FakeVoices();
+      set.hit.shuffle(hit, T0);
+      const shuffle = new FakeVoices();
+      set.sfx.shuffle(shuffle, T0, 0);
+      // Phần sau tiếng báo của đòn chính là tiếng xáo, dời đi shuffleHitRattle giây
+      const rattle = hit.calls.filter((c) => c.t >= T0 + set.shuffleHitRattle - 1e-9);
+      expect(rattle).toHaveLength(shuffle.calls.length);
+      expect(Math.min(...rattle.map((c) => c.t))).toBeCloseTo(T0 + set.shuffleHitRattle);
+    }
+  });
+
   it('tiếng tích gấp cũng hợp lệ', () => {
     for (const id of SOUND_SET_IDS) {
       const v = new FakeVoices();

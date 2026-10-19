@@ -13,6 +13,9 @@ import { unlockOnGesture } from './unlock';
  * Máy không có Web Audio (hoặc chưa initSound) thì mọi hàm ở đây không làm gì.
  */
 
+/** Tiếng phụ (đá vỡ, gửi đòn) phát sau tiếng chính (tiếng xáo, nối cặp) chừng này giây. */
+export const FOLLOW_UP_DELAY = 0.12;
+
 /** Khoảng gọi MusicPlayer.pump (ms); nhỏ hơn nhiều so với LOOKAHEAD. */
 const PUMP_MS = 40;
 
@@ -90,10 +93,16 @@ export function playSfx(name: SfxName, step = 0, delay = 0): void {
   if (t !== null) SOUND_SETS[current().set].sfx[name](synth!, t + delay, step);
 }
 
-/** Tiếng bị đối thủ tấn công khi đấu online. */
-export function playHit(kind: AttackKind): void {
+/**
+ * Tiếng bị đối thủ tấn công khi đấu online. Bị đảo bàn mà có đá vỡ (`stonesBroke`) thì thêm tiếng đá vỡ,
+ * ngay sau lúc tiếng xáo của đòn bắt đầu (như khi tự đảo bàn).
+ */
+export function playHit(kind: AttackKind, stonesBroke = false): void {
   const t = sfxTime();
-  if (t !== null) SOUND_SETS[current().set].hit[kind](synth!, t);
+  if (t === null) return;
+  const set = SOUND_SETS[current().set];
+  set.hit[kind](synth!, t);
+  if (kind === 'shuffle' && stonesBroke) set.sfx.crack(synth!, t + set.shuffleHitRattle + FOLLOW_UP_DELAY, 0);
 }
 
 /**

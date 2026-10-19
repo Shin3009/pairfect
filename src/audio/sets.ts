@@ -63,6 +63,8 @@ export interface SoundSet {
   /** `step`: bậc cao độ theo chuỗi với tiếng nối cặp; 1 là bản gấp (3 giây cuối) với tiếng tích; tiếng khác bỏ qua. */
   sfx: Record<SfxName, (v: Voices, t: number, step: number) => void>;
   hit: Record<AttackKind, (v: Voices, t: number) => void>;
+  /** Tiếng bị đảo bàn: tiếng báo trước, rồi tiếng xáo (như sfx.shuffle) bắt đầu sau chừng này giây. */
+  shuffleHitRattle: number;
   /** Nhạc trong màn chơi. */
   music: MusicDef;
   /** Nhạc ở menu: chậm và thưa hơn nhạc trong màn chơi. */
@@ -218,9 +220,10 @@ const WOOD: SoundSet = {
     shuffle(v, t) {
       marimba(v, t, 76, 0.22, 0.3);
       marimba(v, t + 0.09, 70, 0.22, 0.4);
-      woodShuffle(v, t + 0.2);
+      woodShuffle(v, t + WOOD.shuffleHitRattle);
     },
   },
+  shuffleHitRattle: 0.2,
   // Marimba thong thả, chuông ở nửa sau
   music: {
     bpm: 88,
@@ -405,9 +408,10 @@ const BUBBLE: SoundSet = {
     },
     shuffle(v, t) {
       v.tone({ t, f: 500, to: 250, glide: 0.08, gain: 0.25, dur: 0.1 });
-      bubbleShuffle(v, t + 0.14);
+      bubbleShuffle(v, t + BUBBLE.shuffleHitRattle);
     },
   },
+  shuffleHitRattle: 0.14,
   // Nảy, vui; bass "bụp" trượt lên
   music: {
     bpm: 112,
@@ -604,9 +608,10 @@ const CHIP: SoundSet = {
       [988, 784, 988, 784].forEach((f, i) =>
         v.tone({ t: t + i * 0.06, type: 'pulse', f, gain: 0.07, attack: 0.001, hold: 0.04, dur: 0.01 }),
       );
-      chipShuffle(v, t + 0.26);
+      chipShuffle(v, t + CHIP.shuffleHitRattle);
     },
   },
+  shuffleHitRattle: 0.26,
   // Bass tam giác, hợp âm rải nhanh, giai điệu sóng xung
   music: {
     bpm: 120,

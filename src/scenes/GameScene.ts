@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { audible, LOW_TIME_RATIO, nextCombo, pitchStep, timeCues } from '../audio/rules';
-import { playHit, playSfx, soundSettings, startMusic, stopMusic, toggleMute } from '../audio/sound';
+import { FOLLOW_UP_DELAY, playHit, playSfx, soundSettings, startMusic, stopMusic, toggleMute } from '../audio/sound';
 import { Board, same, STONE, type Gravity, type Move, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, ensureTileTextures, MAX_TYPES, textureFor, textureHeight, TEXTURE_SIZE } from '../game/tileArt';
@@ -58,8 +58,6 @@ const SHUFFLES_PER_LEVEL = 3;
 const RETRIES_PER_RUN = 3;
 // Điểm mỗi cặp và điểm thưởng thời gian nằm trong game/scoring.ts (firestore.rules dựa vào chúng)
 const TIME_BONUS_PER_PAIR = 1; // giây cộng thêm mỗi lần ăn cặp
-/** Tiếng đá vỡ và tiếng gửi đòn phát sau tiếng chính (đảo bàn, nối cặp) chừng này giây. */
-const FOLLOW_UP_SOUND_DELAY = 0.12;
 /**
  * Khoảng lưu màn đang chơi dở, ngoài các lần lưu khi vào màn, tạm dừng (cả khi app xuống nền), thắng, thua.
  * App bị tắt ngang (lỗi, hết pin) thì mất tối đa chừng này thời gian chơi.
@@ -624,9 +622,10 @@ export class GameScene extends Phaser.Scene {
       this.comboAt = now;
     }
     this.matches++;
-    // Ăn cặp liên tiếp thật nhanh thì tiếng nối cặp cao dần; chuỗi đủ dài để tung đòn thì thêm tiếng gửi đòn
+    // Ăn cặp liên tiếp thật nhanh thì tiếng nối cặp cao dần; chuỗi đủ dài để tung đòn thì thêm tiếng gửi đòn,
+    // trừ cặp cuối cùng dọn sạch bàn: đối thủ bỏ qua đòn đó vì mình đã thắng (xem Match)
     playSfx('match', pitchStep(combo));
-    if (attack) playSfx('launch', 0, FOLLOW_UP_SOUND_DELAY);
+    if (attack && !this.board.isCleared()) playSfx('launch', 0, FOLLOW_UP_DELAY);
 
     this.select(null);
     this.setHint(null);
@@ -743,7 +742,7 @@ export class GameScene extends Phaser.Scene {
     const broken = this.match ? this.match.shuffle(auto) : this.board.shuffle();
     if (!broken) return;
     playSfx('shuffle');
-    if (broken.length) playSfx('crack', 0, FOLLOW_UP_SOUND_DELAY);
+    if (broken.length) playSfx('crack', 0, FOLLOW_UP_DELAY);
     if (!auto || !this.match) this.shuffles--;
     this.select(null);
     this.setHint(null);
@@ -983,7 +982,8 @@ export class GameScene extends Phaser.Scene {
   private showHit(e: HitEffect): void {
     // Bàn kín chỗ (chưa ăn được cặp nào, hay đá đã kề khắp nơi): đá không rơi được, không có gì đổi
     if (e.kind === 'stone' && !e.at) return;
-    playHit(e.kind);
+    // Bị đảo bàn mà đá vỡ thì thêm tiếng đá vỡ, sau lúc tiếng xáo của đòn bắt đầu
+    playHit(e.kind, e.kind === 'shuffle' && e.broken.length > 0);
     this.select(null);
     this.setHint(null);
     switch (e.kind) {
@@ -1000,7 +1000,6 @@ export class GameScene extends Phaser.Scene {
       case 'shuffle':
         this.syncTextures();
         this.breakStones(e.broken);
-        if (e.broken.length) playSfx('crack', 0, FOLLOW_UP_SOUND_DELAY);
         break;
     }
     this.toast(ATTACK_TAKEN[e.kind](this.pvp?.oppName ?? 'Đối thủ'));
@@ -1096,7 +1095,8 @@ export class GameScene extends Phaser.Scene {
       body: 'Trận đấu không tạm dừng được: đồng hồ vẫn chạy trong lúc hộp thoại này mở.',
       actions: [
         { label: 'Chơi tiếp', onClick: () => this.closeDialog() },
-        { label: 'Đầu hàng', onClick: () => this.match?.surrender() },
+        // Tiếng thua phát ngay khi đầu hàng, không phát thêm tiếng bấm nút
+        { label: 'Đầu hàng', onClick: () => this.match?.surrender(), sound: false },
       ],
       back: () => this.closeDialog(),
     });

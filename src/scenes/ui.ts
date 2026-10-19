@@ -95,11 +95,13 @@ export class Button {
     onClick: () => unknown,
     depth = 1,
     fontSize = 28,
+    /** false cho nút mà việc bấm đã có tiếng riêng: không phát thêm tiếng bấm nút. */
+    sound = true,
   ) {
     this.bg = scene.add.graphics().setDepth(depth);
     this.bg.fillStyle(C.accent, 1).fillRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
     this.label = scene.add.text(x, y, text, textStyle(fontSize, C.textDark, 'bold')).setOrigin(0.5).setDepth(depth);
-    this.zone = tapZone(scene, x, y, w, h, depth, onClick);
+    this.zone = tapZone(scene, x, y, w, h, depth, onClick, sound);
   }
 
   destroy(): void {
@@ -180,6 +182,8 @@ export class IconButton {
 export interface DialogAction {
   label: string;
   onClick: () => void;
+  /** false nếu việc bấm đã có tiếng riêng (như Đầu hàng phát tiếng thua): không phát thêm tiếng bấm nút. */
+  sound?: boolean;
 }
 
 export interface DialogOptions {
@@ -269,6 +273,8 @@ export function showDialog(scene: Phaser.Scene, opts: DialogOptions): () => void
         // Lần chạm bị bỏ qua (hộp vừa hiện) trả về false: không làm gì và không kêu
         () => (Date.now() >= armedAt ? a.onClick() : false),
         depth + 2,
+        28,
+        a.sound !== false,
       ),
   );
 
