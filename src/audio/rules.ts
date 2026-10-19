@@ -13,6 +13,30 @@ export function pitchStep(combo: number): number {
   return Math.min(Math.max(combo - 1, 0), 7);
 }
 
+/** Thời gian còn lại từ tỉ lệ này của thời gian màn trở xuống thì thanh giờ chuyển đỏ và có tiếng báo. */
+export const LOW_TIME_RATIO = 0.25;
+/** Tiếng tích trong chừng này giây cuối; từ URGENT_SECONDS trở xuống là tiếng tích gấp. */
+const TICK_SECONDS = 10;
+const URGENT_SECONDS = 3;
+
+/** Tiếng báo giờ cho một bước đồng hồ: thanh giờ vừa chuyển đỏ, và tiếng tích (nếu có). */
+export interface TimeCue {
+  warn: boolean;
+  tick: 'normal' | 'urgent' | null;
+}
+
+/**
+ * Tiếng báo khi thời gian còn lại đi từ `prev` tới `left` (giây) trong màn dài `total` giây.
+ * Thanh giờ chuyển đỏ: báo một lần (`warned` là đã báo trong màn này). Tiếng tích: mỗi khi số giây còn lại (làm tròn lên)
+ * giảm xuống một giá trị từ 10 tới 1; thưởng giờ làm số giây tăng lại thì không kêu, máy bận làm nhảy nhiều giây thì một tiếng.
+ */
+export function timeCues(prev: number, left: number, total: number, warned: boolean): TimeCue {
+  const low = total * LOW_TIME_RATIO;
+  const s = Math.ceil(left);
+  const tick = s < Math.ceil(prev) && s >= 1 && s <= TICK_SECONDS ? (s <= URGENT_SECONDS ? 'urgent' : 'normal') : null;
+  return { warn: !warned && prev > low && left <= low, tick };
+}
+
 /** Hiệu ứng và nhạc nền có bật không. */
 export interface SoundSwitches {
   sfx: boolean;
