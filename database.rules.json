@@ -5,30 +5,39 @@
   "rules": {
     "pvpRooms": {
       "$code": {
-        // Người chơi đã đăng nhập (ẩn danh) đọc được phòng, để vào phòng bằng mã
-        ".read": "auth != null",
-        // Chủ phòng: tạo phòng khi mã chưa có ai dùng, sửa và xóa phòng của mình
+        // Không cho đọc cả phòng: quyền đọc chia theo từng phần bên dưới, vì offer / answer chứa địa chỉ IP
+        // của hai người chơi. Chủ phòng: tạo phòng khi mã chưa có ai dùng, sửa và xóa phòng của mình
         ".write": "auth != null && (data.exists() ? data.child('host').val() === auth.uid : newData.child('host').val() === auth.uid)",
         // Mã phòng: 6 ký tự, không có I, O, 0, 1 (CODE_ALPHABET trong src/pvp/protocol.ts)
         ".validate": "$code.matches(/^[A-HJ-NP-Z2-9]{6}$/) && newData.hasChildren(['host', 'hostName', 'protocol', 'createdAt'])",
         "host": { ".validate": "newData.isString()" },
-        "hostName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
-        "protocol": { ".validate": "newData.isNumber()" },
-        "createdAt": { ".validate": "newData.isNumber()" },
-        // Khách: vào phòng chưa có khách (ghi uid của chính mình), hoặc tự rời phòng
+        // Phần công khai: người chơi đã đăng nhập (ẩn danh) đọc được để vào phòng bằng mã
+        "hostName": {
+          ".read": "auth != null",
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+        },
+        "protocol": { ".read": "auth != null", ".validate": "newData.isNumber()" },
+        // Giờ tạo phòng theo đồng hồ máy chủ (không ghi tùy ý được), để dọn được phòng bị bỏ lại theo tuổi
+        "createdAt": { ".validate": "newData.isNumber() && newData.val() === now" },
+        // Khách: vào phòng chưa có khách (ghi uid của chính mình), hoặc tự rời phòng.
+        // Ai đăng nhập cũng đọc được, để biết phòng đã có khách chưa
         "guest": {
+          ".read": "auth != null",
           ".write": "auth != null && (data.exists() ? !newData.exists() && data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
           ".validate": "newData.hasChildren(['uid', 'name'])",
           "uid": { ".validate": "newData.isString()" },
           "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
           "$other": { ".validate": false }
         },
-        // Mô tả kết nối WebRTC: lời mời của chủ phòng và câu trả lời của khách đang ở trong phòng
+        // Mô tả kết nối WebRTC: lời mời của chủ phòng và câu trả lời của khách đang ở trong phòng.
+        // Chỉ hai người đó đọc được, vì mô tả có địa chỉ IP công khai của người gửi
         "offer": {
+          ".read": "auth != null && (data.parent().child('host').val() === auth.uid || data.parent().child('guest/uid').val() === auth.uid)",
           ".validate": "newData.hasChildren(['n', 'sdp']) && newData.child('n').isNumber() && newData.child('sdp').isString() && newData.child('sdp').val().length < 20000",
           "$field": { ".validate": "$field === 'n' || $field === 'sdp'" }
         },
         "answer": {
+          ".read": "auth != null && (data.parent().child('host').val() === auth.uid || data.parent().child('guest/uid').val() === auth.uid)",
           ".write": "auth != null && data.parent().child('guest/uid').val() === auth.uid",
           ".validate": "newData.hasChildren(['n', 'sdp']) && newData.child('n').isNumber() && newData.child('sdp').isString() && newData.child('sdp').val().length < 20000",
           "$field": { ".validate": "$field === 'n' || $field === 'sdp'" }

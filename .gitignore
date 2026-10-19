@@ -2,6 +2,8 @@ node_modules/
 dist/
 android/
 apk-output/
+# Dữ liệu cục bộ của `npx wrangler pages dev dist` (thử bản web với header của Cloudflare)
+.wrangler/
 *.jks
 *.keystore
 .DS_Store

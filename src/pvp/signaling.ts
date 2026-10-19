@@ -13,7 +13,8 @@ import { PROTOCOL, PvpError, randomCode } from './protocol';
  * - Chủ phòng tạo phòng; phòng tự xóa khi chủ phòng mất kết nối với Firebase (onDisconnect) hoặc rời phòng.
  * - Khách vào phòng còn trống bằng cách ghi `guest`; tự xóa khi khách mất kết nối hoặc rời phòng.
  * - `offer` / `answer`: mô tả kết nối của chủ phòng / khách (xem Description).
- * database.rules.json chỉ cho chủ phòng sửa phòng của mình, và khách chỉ ghi `guest` và `answer`.
+ * database.rules.json chỉ cho chủ phòng sửa phòng của mình, và khách chỉ ghi `guest` và `answer`. Người ngoài chỉ đọc
+ * được `hostName`, `protocol` và `guest`; `offer` / `answer` chứa địa chỉ IP nên chỉ chủ phòng và khách đọc được.
  * Thư viện Firebase Database chỉ được tải khi mở phòng chờ.
  */
 const ROOMS = 'pvpRooms';
@@ -76,11 +77,12 @@ export async function createRoom(name: string): Promise<Room> {
 /** Vào phòng bằng mã (đã qua cleanCode). Lỗi PvpError nếu không có phòng, phòng đã có khách hay khác phiên bản. */
 export async function joinRoom(code: string, name: string): Promise<Room> {
   const { fdb, db, uid } = await connect();
-  const snap = await fdb.get(fdb.ref(db, `${ROOMS}/${code}`));
-  const room = snap.val() as Record<string, unknown> | null;
-  if (!room) throw new PvpError('not-found');
-  if (room.protocol !== PROTOCOL) throw new PvpError('version');
-  if (room.guest) throw new PvpError('full');
+  // Chỉ đọc phần công khai của phòng: database.rules.json không cho người ngoài đọc cả phòng (offer có địa chỉ IP)
+  const read = async (child: string): Promise<unknown> => (await fdb.get(fdb.ref(db, `${ROOMS}/${code}/${child}`))).val();
+  const [protocol, hostName, guestEntry] = await Promise.all([read('protocol'), read('hostName'), read('guest')]);
+  if (protocol === null) throw new PvpError('not-found');
+  if (protocol !== PROTOCOL) throw new PvpError('version');
+  if (guestEntry) throw new PvpError('full');
   const guest = fdb.ref(db, `${ROOMS}/${code}/guest`);
   try {
     // Luật chỉ cho ghi khi phòng chưa có khách: hai người cùng vào thì một người bị từ chối
@@ -89,8 +91,7 @@ export async function joinRoom(code: string, name: string): Promise<Room> {
     throw new PvpError('full');
   }
   await fdb.onDisconnect(guest).remove();
-  const hostName = typeof room.hostName === 'string' ? cleanName(room.hostName) || '?' : '?';
-  return makeRoom(fdb, db, code, 'guest', hostName);
+  return makeRoom(fdb, db, code, 'guest', typeof hostName === 'string' ? cleanName(hostName) || '?' : '?');
 }
 
 function makeRoom(fdb: DatabaseModule, db: Database, code: string, role: 'host' | 'guest', hostName: string): Room {

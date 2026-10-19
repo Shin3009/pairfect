@@ -10,9 +10,12 @@ service cloud.firestore {
       allow read: if true;
       // Chỉ chính người chơi được ghi document của mình
       allow create: if isOwner(uid) && isValid(request.resource.data);
-      // Kỷ lục chỉ được tăng (hoặc giữ nguyên khi đổi tên)
+      // Kỷ lục chỉ được tăng (hoặc giữ nguyên khi đổi tên). Hai lần ghi cách nhau ít nhất 2 giây: game chỉ ghi sau
+      // một lượt thua hoặc khi đổi tên nên gần như không chạm mức này (lỡ chạm thì lần đồng bộ sau gửi lại),
+      // còn script ghi liên tục thì bị chặn bớt.
       allow update: if isOwner(uid) && isValid(request.resource.data)
-        && request.resource.data.score >= resource.data.score;
+        && request.resource.data.score >= resource.data.score
+        && request.time > resource.data.updatedAt + duration.value(2, 's');
       allow delete: if false;
     }
   }
@@ -26,7 +29,9 @@ service cloud.firestore {
     return d.keys().hasAll(fields) && d.keys().hasOnly(fields)
       // Game giới hạn tên 20 ký tự; ở đây nới rộng hơn cho chắc
       && d.name is string && d.name.size() > 0 && d.name.size() <= 40
-      && d.stage is int && d.stage >= 1
+      // Game có vô số màn, nhưng không ai chơi thật tới màn 1000 (MAX_ONLINE_STAGE trong src/game/scoring.ts).
+      // Chặn ở đây để điểm giả không lớn vô lý, vì điểm tối đa tính theo màn ngay dưới đây.
+      && d.stage is int && d.stage >= 1 && d.stage <= 999
       // Thua ở màn n thì điểm không thể vượt n * 1700 (MAX_SCORE_PER_STAGE trong src/game/scoring.ts)
       && d.score is int && d.score > 0 && d.score <= d.stage * 1700
       && d.updatedAt == request.time;

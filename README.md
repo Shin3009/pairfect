@@ -63,6 +63,15 @@ Trước khi phát hành, nên làm thêm:
 - Thay icon và splash: dùng gói `@capacitor/assets` để sinh tự động từ một ảnh gốc.
 - Build bản phát hành: trong Android Studio chọn *Build → Generate Signed App Bundle / APK*. Google Play yêu cầu định dạng AAB.
 
+## Đưa lên web (Cloudflare Pages)
+
+`npm run build` tạo một trang web tĩnh trong `dist/` (đường dẫn tương đối, chạy được cả trong thư mục con), nên dịch vụ web tĩnh nào cũng dùng được. Với Cloudflare Pages:
+
+- Nối repo với một project Pages: build command `npm run build`, thư mục output `dist`. Thêm các biến `VITE_*` giống `.env.local` vào biến môi trường của project, vì chúng được nhúng lúc build. Hoặc build trên máy rồi chạy `npx wrangler pages deploy dist`.
+- `public/_headers` (Vite chép vào `dist/`) đặt các header bảo mật. Content-Security-Policy đang ở chế độ Report-Only: thử bảng xếp hạng và đấu online, console không báo `[Report Only]` thì đổi sang `Content-Security-Policy`. Thử trên máy bằng `npx wrangler pages dev dist`, lệnh này áp header giống Cloudflare.
+- Trên trình duyệt, lượt chơi chỉ lưu trong localStorage (không có bản sao như trên Android), nút Back của trình duyệt rời trang (lượt chơi vẫn được lưu), và màn hình dọc hiện lời nhắc xoay máy.
+- Mọi biến `VITE_*` đều nằm công khai trong bundle; đừng đặt bí mật thật vào đó. Các rủi ro còn lại khi đưa lên web và cách xử lý: xem [`docs/security.md`](docs/security.md).
+
 ## Gửi kỷ lục lên Firebase
 
 Lần đầu mở game, người chơi được hỏi tên. Tên lưu trên máy và hiện ở góc trên bên trái menu; chạm vào đó để đổi tên. Kỷ lục trên máy (điểm cao nhất trên bảng xếp hạng) được đồng bộ lên Cloud Firestore, **mỗi người chơi một document** `highscores/<uid>`:
@@ -92,10 +101,10 @@ Cài đặt (làm một lần):
 `.env.local` không được đưa lên git. Cấu hình này không phải bí mật (nó nằm sẵn trong APK); dữ liệu được bảo vệ bằng `firestore.rules`:
 
 - Ai cũng đọc được (để làm bảng xếp hạng chung).
-- Chỉ chính người chơi ghi được document của mình, kỷ lục chỉ được tăng, không ai xóa được.
-- Dữ liệu phải đúng định dạng, và điểm không được vượt mức có thể đạt tới màn đó: thua ở màn n thì tối đa n × 1700 điểm (`MAX_SCORE_PER_STAGE` trong `src/game/scoring.ts`; `npm test` kiểm tra mọi màn đều nằm dưới mức này và `firestore.rules` dùng đúng số này).
+- Chỉ chính người chơi ghi được document của mình, kỷ lục chỉ được tăng, không ai xóa được. Hai lần ghi phải cách nhau ít nhất 2 giây.
+- Dữ liệu phải đúng định dạng, và điểm không được vượt mức có thể đạt tới màn đó: thua ở màn n thì tối đa n × 1700 điểm (`MAX_SCORE_PER_STAGE` trong `src/game/scoring.ts`; `npm test` kiểm tra mọi màn đều nằm dưới mức này và `firestore.rules` dùng đúng số này). Màn tối đa là 999 (`MAX_ONLINE_STAGE`, cũng được `npm test` kiểm tra).
 
-Vẫn có thể bị gửi điểm giả nằm dưới mức đó, bằng cách gọi thẳng Firebase thay vì chơi. Muốn chặn hẳn thì cần Firebase App Check với Play Integrity (xem Gợi ý phát triển tiếp).
+Vẫn có thể bị gửi điểm giả nằm dưới mức đó, bằng cách gọi thẳng Firebase thay vì chơi, hoặc trên bản web chỉ cần sửa localStorage bằng DevTools. Xem [`docs/security.md`](docs/security.md) về các cách chặn.
 
 ## Đấu online
 
@@ -122,7 +131,7 @@ Luật của một trận "đua dọn bàn" (`src/pvp/match.ts`):
 
 Cách hoạt động:
 
-- **Tìm nhau:** phòng chờ nằm trên Firebase Realtime Database (`pvpRooms/<mã>`), dùng chung đăng nhập ẩn danh với bảng xếp hạng. Hai máy trao đổi mô tả kết nối WebRTC qua phòng chờ.
+- **Tìm nhau:** phòng chờ nằm trên Firebase Realtime Database (`pvpRooms/<mã>`), dùng chung đăng nhập ẩn danh với bảng xếp hạng. Hai máy trao đổi mô tả kết nối WebRTC qua phòng chờ. Mô tả này có địa chỉ IP của người gửi, nên `database.rules.json` chỉ cho chủ phòng và khách đang ở trong phòng đọc nó; người khác có mã phòng chỉ đọc được tên chủ phòng, phiên bản và chỗ của khách.
 - **Kết nối:** kênh dữ liệu WebRTC giữa hai máy. Nối thẳng được thì nối thẳng (nhờ STUN); mạng chặn nối thẳng (nhiều mạng 4G/5G, mạng công ty) thì đi qua máy chủ chuyển tiếp TURN của Metered. Tin nhắn trong trận không đi qua Firebase. Mất kết nối giữa trận (đổi mạng) thì chủ phòng tự kết nối lại.
 - **Cùng một bàn mà không phải gửi bàn:** bàn được sinh từ một hạt giống chung (`src/game/rng.ts`). Mỗi máy chỉ gửi nước đi của mình, máy kia chơi lại nước đó trên bản sao bàn của đối thủ. Đòn tấn công cũng không gửi riêng: máy bị đánh tự tính ra đòn từ thời điểm các nước đi của đối thủ, áp lên bàn mình rồi báo lại như một nước đi, nên máy kẻ tấn công kiểm tra được đòn có thật và bàn thu nhỏ hiện đúng đá, nghiêng, đảo. Nhờ vậy bàn thu nhỏ luôn đúng, và nước đi không hợp lệ (gian lận) bị phát hiện ngay: đối thủ bị xử thua. Vì thế hai máy phải cùng phiên bản: đổi luật trận đấu, `Board` hay cách sinh bàn thì tăng `PROTOCOL` trong `src/pvp/protocol.ts`, để máy khác phiên bản không vào được phòng của nhau.
 - **Phân xử:** chủ phòng phân xử thắng thua; đồng hồ hai máy được đồng bộ qua các lần ping.
@@ -130,7 +139,7 @@ Cách hoạt động:
 Cài đặt (làm một lần, sau phần Firebase ở trên):
 
 1. Firebase Console → *Build → Realtime Database → Create database*: chọn vùng gần người chơi, chế độ *locked mode*.
-2. Tab *Rules* của Realtime Database: dán nội dung file `database.rules.json` rồi bấm *Publish*.
+2. Tab *Rules* của Realtime Database: dán nội dung file `database.rules.json` rồi bấm *Publish*. Bản game 0.2.0 trở về trước không vào phòng được với luật hiện tại (vẫn tạo phòng được), nên cập nhật app trên mọi máy trước khi dán luật mới.
 3. Chép địa chỉ database (dạng `https://<project>-default-rtdb.<vùng>.firebasedatabase.app`) vào `VITE_FIREBASE_DATABASE_URL` trong `.env.local`.
 4. Metered (metered.ca) → *TURN Server*: tạo một credential, chép tên miền app (dạng `<app>.metered.live`) vào `VITE_METERED_DOMAIN` và **API key của credential đó** vào `VITE_METERED_API_KEY`. Đừng dùng *Secret Key* của tài khoản: key đó không được nằm trong app. Bỏ trống thì game chỉ dùng STUN, vẫn chơi được khi hai máy nối thẳng được với nhau.
 5. Chạy lại `npm run dev`, hoặc build lại APK.
@@ -189,6 +198,8 @@ src/
     PvpLobbyScene.ts    Phòng chờ đấu online: tạo phòng (hiện mã), vào phòng (nhập mã), đang kết nối, lỗi
     GameScene.ts        Hiển thị, xử lý chạm, hiệu ứng, HUD, tạm dừng, thắng/thua; cả trận đấu online
 database.rules.json     Quy tắc bảo mật của Realtime Database cho phòng chờ đấu online (dán vào Firebase Console)
+public/_headers         Header bảo mật (CSP...) cho bản web trên Cloudflare Pages, Vite chép vào dist/
+docs/security.md        Rà soát bảo mật bản web: những gì đã sửa và các vấn đề còn lại
 ```
 
 `Board.ts` không phụ thuộc Phaser nên có thể test riêng hoặc tái sử dụng.
@@ -230,5 +241,5 @@ Hãy dùng hình ảnh, âm thanh và tên game của riêng bạn (hoặc asset
 - Âm thanh khi chọn, khi nối, khi qua màn (`this.load.audio` + `this.sound.play`).
 - Rung khi nối thành công: plugin `@capacitor/haptics`.
 - Quảng cáo / mua trong ứng dụng: các plugin cộng đồng của Capacitor cho AdMob và Google Play Billing.
-- Chặn điểm giả gửi thẳng lên Firebase: bật Firebase App Check với Play Integrity (cần plugin native cho Capacitor, đăng ký app Android trong Firebase và đưa app lên Google Play), rồi bật Enforce cho Firestore.
+- Chặn điểm giả và việc dùng hết hạn mức Firebase / Metered: xem các vấn đề còn lại trong [`docs/security.md`](docs/security.md) (kiểm tra điểm phía máy chủ, Firebase App Check, dọn phòng cũ, cấp credential TURN ngắn hạn).
 - Đấu online: tìm trận ngẫu nhiên thay vì chỉ vào phòng bằng mã; cân chỉnh các đòn tấn công (`COMBO_MS`, `COMBO_STEP`, `COMBO_ATTACKS`, `FOG_MS` trong `src/pvp/attacks.ts`) sau khi chơi thử với người thật.

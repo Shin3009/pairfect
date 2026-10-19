@@ -1,0 +1,20 @@
+# Header HTTP cho bản web trên Cloudflare Pages. Vite chép file này vào dist/ (xem docs/security.md).
+#
+# Content-Security-Policy đang ở chế độ Report-Only: trình duyệt chỉ báo vi phạm trong console, không chặn gì.
+# Thử hết bảng xếp hạng và đấu online (cả khi đi qua TURN) mà console không báo "[Report Only]" thì đổi tên header
+# thành Content-Security-Policy.
+# - script-src / frame-src có Realtime Database: khi không mở được WebSocket, nó chuyển sang long-polling bằng thẻ
+#   script và iframe. firebaseio.com là tên miền của database ở vùng us-central1.
+# - img-src có data: vì Vite nhúng ảnh ô nhỏ thành data URL, và Phaser tạo vài texture có sẵn bằng data URL.
+# - style-src có 'unsafe-inline' cho khối <style> trong index.html.
+# - frame-ancestors 'none' / X-Frame-Options: không cho trang khác nhúng game. Muốn nhúng (itch.io...) thì sửa hai dòng này.
+/*
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' https://*.firebasedatabase.app https://*.firebaseio.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://*.firebaseio.com wss://*.firebaseio.com https://*.metered.live; frame-src https://*.firebasedatabase.app https://*.firebaseio.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+# Bản xem trước của từng nhánh / từng lần deploy (<mã>.<project>.pages.dev): không cho máy tìm kiếm đánh chỉ mục
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex
