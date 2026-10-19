@@ -57,7 +57,7 @@ npm run android:open
 Trước khi phát hành, nên làm thêm:
 
 - Đổi `appId` trong `capacitor.config.ts` (ví dụ `com.tuan.pairfect`), làm trước khi chạy `cap add android`. Đây là ID vĩnh viễn trên Google Play.
-- Khóa màn hình ngang: trong `android/app/src/main/AndroidManifest.xml`, đặt `android:screenOrientation="userLandscape"` cho thẻ `<activity>` (xoay được giữa hai chiều ngang, theo nút khóa xoay của người dùng). `build-apk.bat` tự làm bước này.
+- Khóa màn hình ngang: trong `android/app/src/main/AndroidManifest.xml`, đặt `android:screenOrientation="userLandscape"` cho thẻ `<activity>` (xoay được giữa hai chiều ngang, theo nút khóa xoay của người dùng), và `android:appCategory="game"` cho thẻ `<application>`. Thiếu dòng sau thì trên Android 16 máy tính bảng (vd Galaxy Tab A11) bỏ qua khóa ngang, vì app target API 36 chỉ được giữ hướng màn hình trên màn hình rộng nếu là game. `build-apk.bat` tự làm bước này.
 - Toàn màn hình: `SystemBars.hidden` trong `capacitor.config.ts` ẩn thanh trạng thái và thanh điều hướng lúc mở app, nhưng vuốt từ mép màn hình là chúng hiện lại luôn. `build-apk.bat` ghi thêm vào `MainActivity.java` để vuốt chỉ hiện tạm rồi tự ẩn (chế độ immersive). Build thủ công thì chép phần `MainActivity` trong `build-apk.ps1` sang.
 - Số phiên bản: đặt `versionName` và `versionCode` trong `android/app/build.gradle` khớp với `version` của `package.json` (xem ở trên). `build-apk.bat` tự làm bước này.
 - Thay icon và splash: dùng gói `@capacitor/assets` để sinh tự động từ một ảnh gốc.

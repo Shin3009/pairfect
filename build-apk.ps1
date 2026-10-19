@@ -293,6 +293,14 @@ if ($xml -match 'android:screenOrientation="[^"]*"') {
 } else {
   $newXml = ([regex]'<activity').Replace($xml, "<activity $orientation", 1)
 }
+# Từ Android 16, app target API 36 trở lên bị bỏ qua screenOrientation trên màn hình rộng (smallest width >= 600dp,
+# vd Galaxy Tab A11), nên máy tính bảng vẫn xoay dọc. Game được miễn quy tắc này nhờ android:appCategory="game".
+$category = 'android:appCategory="game"'
+if ($newXml -match 'android:appCategory="[^"]*"') {
+  $newXml = $newXml -replace 'android:appCategory="[^"]*"', $category
+} else {
+  $newXml = ([regex]'<application').Replace($newXml, "<application $category", 1)
+}
 if ($newXml -ne $xml) {
   [IO.File]::WriteAllText($manifest, $newXml, (New-Object Text.UTF8Encoding $false))
   Write-Ok 'Đã khóa màn hình ngang trong AndroidManifest.xml'
