@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { audible, nextCombo, pitchStep } from '../audio/rules';
+import { playHit, playSfx, soundSettings, startMusic, stopMusic, toggleMute } from '../audio/sound';
 import { Board, same, STONE, type Gravity, type Move, type Point } from '../game/Board';
 import { getLevel, gravityFor, GRAVITY_LABEL, type LevelConfig } from '../game/levels';
 import { createTileTextures, ensureTileTextures, MAX_TYPES, textureFor, textureHeight, TEXTURE_SIZE } from '../game/tileArt';
@@ -21,9 +23,10 @@ import { Button, C, IconButton, onGameResize, showDialog, textStyle, type Dialog
 
 /**
  * Thanh HUD mỏng một hàng phía trên, nhường tối đa chiều cao cho bàn chơi:
- * [Màn][Kiểu dồn][Gợi ý][Đảo bàn][Dừng][Thanh thời gian][Điểm].
- * Đấu online: [Số cặp còn lại][Kiểu dồn][Gợi ý][Đảo bàn][Đầu hàng][Thanh thời gian][Tên, số cặp và bàn thu nhỏ của đối thủ].
+ * [Màn][Kiểu dồn][Gợi ý][Đảo bàn][Dừng][Loa][Thanh thời gian][Điểm].
+ * Đấu online: [Số cặp còn lại][Kiểu dồn][Gợi ý][Đảo bàn][Đầu hàng][Loa][Thanh thời gian][Tên, số cặp và bàn thu nhỏ của đối thủ].
  * Gợi ý (bóng đèn) và Đảo bàn (mũi tên bắt chéo) là nút biểu tượng, số lượt còn lại hiện ở huy hiệu góc nút.
+ * Loa tắt / bật lại mọi âm thanh (xem audio/rules.muteToggled), không có huy hiệu.
  * Kỷ lục (điểm cao nhất trên bảng xếp hạng) không hiện trong HUD, chỉ hiện ở menu.
  */
 const HUD_H = 80;
@@ -169,6 +172,11 @@ export class GameScene extends Phaser.Scene {
   private paused = false;
   /** Số cặp đã ăn trong màn; quyết định hướng dồn của kiểu Xoay vòng. */
   private matches = 0;
+  /** Chơi một mình: độ dài chuỗi và lúc ăn cặp gần nhất (Date.now()), để tiếng nối cặp cao dần (xem audio/rules). */
+  private combo = 0;
+  private comboAt: number | null = null;
+  /** Đấu online: đã phát tiếng thắng / thua của trận này (hộp kết quả mở lại nhiều lần). */
+  private resultSounded = false;
 
   /**
    * Đấu online: phiên và trận đang chơi; null khi chơi một mình. Bàn của trận (match.me.board) chính là this.board,
@@ -196,6 +204,7 @@ export class GameScene extends Phaser.Scene {
   private timeBarRect!: Rect;
   private hintBtn!: IconButton;
   private shuffleBtn!: IconButton;
+  private muteBtn!: IconButton;
   private toastText!: Phaser.GameObjects.Text;
   private dialog: { opts: DialogOptions; close: () => void } | null = null;
 
@@ -230,6 +239,9 @@ export class GameScene extends Phaser.Scene {
     this.ended = false;
     this.recorded = false;
     this.matches = 0;
+    this.combo = 0;
+    this.comboAt = null;
+    this.resultSounded = false;
     this.hud = [];
     this.dialog = null;
   }
@@ -283,10 +295,12 @@ export class GameScene extends Phaser.Scene {
     onSuspend(this, () => this.pause());
 
     if (play?.lost) {
-      // App bị tắt lúc đang hiện hộp thoại thua: hiện lại đúng hộp thoại đó
-      this.loseLevel(play.lost);
+      // App bị tắt lúc đang hiện hộp thoại thua: hiện lại đúng hộp thoại đó, không phát lại tiếng thua
+      this.loseLevel(play.lost, true);
       return;
     }
+    // Sang màn sau hay chơi lại màn thì nhạc đang phát chạy tiếp (xem audio/sound.ts)
+    startMusic();
     // Bản lưu có thể rơi đúng lúc bàn vừa dọn sạch hay vừa bế tắc, trước khi kịp qua màn / tự đảo bàn
     if (play) this.checkBoard();
     this.saveProgress();
@@ -447,6 +461,9 @@ export class GameScene extends Phaser.Scene {
     x += HUD_BTN + 16;
     // Đấu online không tạm dừng được: nút này mở hộp hỏi đầu hàng
     keep(new Button(this, x + HUD_BTN / 2, cy, HUD_BTN, HUD_BTN, 'II', () => this.pause(), 1, 22));
+    x += HUD_BTN + 16;
+    this.muteBtn = keep(new IconButton(this, x + HUD_BTN / 2, cy, HUD_BTN, this.soundIcon(), () => this.onMute()));
+    this.muteBtn.setCount(null, true);
     x += HUD_BTN + 20;
 
     this.scoreText = null;
@@ -543,10 +560,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.board.isInside(pt) || this.board.get(pt) <= 0) return;
 
     if (!this.selected) {
+      playSfx('select');
       this.select(pt);
       return;
     }
     if (same(this.selected, pt)) {
+      playSfx('deselect');
       this.select(null);
       return;
     }
@@ -555,7 +574,8 @@ export class GameScene extends Phaser.Scene {
     if (path) {
       this.matchPair(this.selected, pt, path);
     } else {
-      // Không nối được: chuyển chọn sang ô mới
+      // Không nối được: chuyển chọn sang ô mới. Cùng hình mà bị chặn thì báo "không nối được"; khác hình chỉ là đổi ý
+      playSfx(this.board.get(this.selected) === this.board.get(pt) ? 'wrong' : 'select');
       this.select(pt);
     }
   }
@@ -575,15 +595,22 @@ export class GameScene extends Phaser.Scene {
   private matchPair(a: Point, b: Point, path: Point[]): void {
     // Cập nhật logic + dồn ô. Đấu online: qua Match, để nước đi được gửi cho đối thủ (kèm đòn nếu thành chuỗi)
     let moves: Move[];
+    let combo: number;
     if (this.match) {
       const played = this.match.play(a, b);
       if (!played) return;
       moves = played.moves;
+      combo = played.combo;
       this.showCombo(played.combo, played.attack);
     } else {
       moves = this.board.remove(a, b, gravityFor(this.cfg.gravity, this.matches));
+      const now = Date.now();
+      combo = this.combo = nextCombo(this.comboAt, now, this.combo);
+      this.comboAt = now;
     }
     this.matches++;
+    // Ăn cặp liên tiếp thật nhanh thì tiếng nối cặp cao dần
+    playSfx('match', pitchStep(combo));
 
     this.select(null);
     this.setHint(null);
@@ -668,6 +695,7 @@ export class GameScene extends Phaser.Scene {
     if (!move) return;
     this.hints--;
     this.setHint(move);
+    playSfx('hint');
     for (const p of move) {
       const img = this.sprites[p.r][p.c];
       if (img) this.tweens.add({ targets: img, angle: { from: -8, to: 8 }, duration: 80, yoyo: true, repeat: 3, onComplete: () => img.setAngle(0) });
@@ -698,6 +726,7 @@ export class GameScene extends Phaser.Scene {
     // Đấu online: qua Match, để lần đảo được gửi cho đối thủ
     const broken = this.match ? this.match.shuffle(auto) : this.board.shuffle();
     if (!broken) return;
+    playSfx('shuffle');
     if (!auto || !this.match) this.shuffles--;
     this.select(null);
     this.setHint(null);
@@ -775,6 +804,8 @@ export class GameScene extends Phaser.Scene {
     };
     // Lưu ngay chỗ vào màn sau: app bị tắt lúc đang hiện hộp thoại này thì chơi tiếp từ màn sau
     saveGame(next);
+    // Nhạc nền nhỏ lại trong lúc phát rồi chạy tiếp sang màn sau
+    playSfx('clear');
     this.openDialog({
       title: 'Qua màn!',
       body:
@@ -793,11 +824,14 @@ export class GameScene extends Phaser.Scene {
    * Thua màn (hết giờ / hết nước đi). Còn lượt chơi lại thì được chơi lại màn này với điểm và lượt trợ giúp
    * như lúc mới vào màn (cả lượt chơi chỉ có RETRIES_PER_RUN lượt); hết lượt thì chỉ còn nút về menu.
    * Lượt chơi chỉ được ghi lên bảng xếp hạng khi về menu từ đây (nút hoặc Back), xem finishRun.
-   * Trước đó trạng thái thua được lưu lại, nên app bị tắt lúc này thì chơi tiếp sẽ hiện lại hộp thoại này.
+   * Trước đó trạng thái thua được lưu lại, nên app bị tắt lúc này thì chơi tiếp sẽ hiện lại hộp thoại này
+   * (`restored`: khi đó không phát lại tiếng thua). Nhạc nền tắt trong lúc hộp thoại mở.
    */
-  private loseLevel(why: LoseReason): void {
+  private loseLevel(why: LoseReason, restored = false): void {
     if (this.ended) return;
     this.ended = true;
+    if (!restored) playSfx('lose');
+    stopMusic();
     this.lost = why;
     this.select(null);
     this.saveProgress();
@@ -896,6 +930,7 @@ export class GameScene extends Phaser.Scene {
       this.countdownText = null;
       this.createTiles();
       this.toast('Bắt đầu!');
+      startMusic();
     }
     this.timeLeft = m.timeLeft();
     this.drawTimeBar();
@@ -913,6 +948,7 @@ export class GameScene extends Phaser.Scene {
   private showHit(e: HitEffect): void {
     // Bàn kín chỗ (chưa ăn được cặp nào, hay đá đã kề khắp nơi): đá không rơi được, không có gì đổi
     if (e.kind === 'stone' && !e.at) return;
+    playHit(e.kind);
     this.select(null);
     this.setHint(null);
     switch (e.kind) {
@@ -1041,6 +1077,13 @@ export class GameScene extends Phaser.Scene {
     this.drawFog();
     const o = m.outcome;
     const opp = s.oppName;
+    // Hộp kết quả mở lại mỗi khi có gì đổi: tiếng thắng / thua chỉ phát lần đầu, hòa thì không có tiếng
+    if (!this.resultSounded) {
+      this.resultSounded = true;
+      if (o.result === 'win') playSfx('clear');
+      else if (o.result === 'lose') playSfx('lose');
+      stopMusic();
+    }
     const lines = [outcomeText(o, opp), `Bạn còn ${m.me.pairsLeft()} cặp, ${opp} còn ${m.opp.pairsLeft()} cặp.`];
     if (s.closed) {
       if (o.why !== 'left') lines.push(`${opp} đã rời phòng.`);
@@ -1106,10 +1149,24 @@ export class GameScene extends Phaser.Scene {
       ],
       back: () => this.resume(),
     });
+    stopMusic();
   }
 
   private resume(): void {
     this.closeDialog();
     this.setPaused(false);
+    startMusic();
+  }
+
+  // ---------------- Âm thanh ----------------
+
+  /** Biểu tượng nút loa: loa gạch chéo khi đã tắt cả hiệu ứng lẫn nhạc. */
+  private soundIcon(): 'sound' | 'mute' {
+    return audible(soundSettings()) ? 'sound' : 'mute';
+  }
+
+  private onMute(): void {
+    toggleMute();
+    this.muteBtn.setIcon(this.soundIcon());
   }
 }
