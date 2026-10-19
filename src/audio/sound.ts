@@ -5,6 +5,7 @@ import { MusicPlayer, type MusicKind } from './music';
 import { muteToggled, type SoundSwitches } from './rules';
 import { SOUND_SETS, type SfxName } from './sets';
 import { Synth } from './synth';
+import { unlockOnGesture } from './unlock';
 
 /**
  * Âm thanh dùng chung cho mọi scene: hiệu ứng, tiếng bị tấn công và nhạc nền theo cài đặt của người chơi.
@@ -45,6 +46,8 @@ export function initSound(game: Phaser.Game): void {
   synth = s;
   player = new MusicPlayer({ now: () => c.currentTime, voices: s, createOutput: () => s.musicOutput() });
   window.setInterval(() => player?.pump(), PUMP_MS);
+  // Lần chạm đầu tiên ở bất kỳ đâu (cả hộp nhập tên lúc mới mở game) mở khóa âm thanh, để nhạc menu chạy ngay
+  unlockOnGesture(c);
   // App xuống nền: im ngay; quay lại thì chạy tiếp (MusicPlayer bỏ qua phần nhạc đã lỡ)
   game.events.on(Phaser.Core.Events.HIDDEN, () => void c.suspend().catch(() => {}));
   game.events.on(Phaser.Core.Events.VISIBLE, () => void c.resume().catch(() => {}));
