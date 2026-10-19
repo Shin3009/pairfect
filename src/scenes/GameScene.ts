@@ -930,7 +930,8 @@ export class GameScene extends Phaser.Scene {
       this.countdownText = null;
       this.createTiles();
       this.toast('Bắt đầu!');
-      startMusic();
+      // Trận có thể đã xong ngay trong lúc đếm ngược (đầu hàng, đối thủ rời đi): khi đó không bật nhạc dưới hộp kết quả
+      if (!m.outcome) startMusic();
     }
     this.timeLeft = m.timeLeft();
     this.drawTimeBar();
