@@ -93,7 +93,8 @@ Tên trong bảng là chữ hiện trong game. Tiếng và nhạc của từng b
 |---|---|
 | Vào màn chơi một mình | Bắt đầu (tăng dần 0,6 s), trừ khi đang dựng lại hộp thua từ bản lưu (`play.lost`): khi đó giữ tắt, như lúc hộp thua mở. |
 | Đấu online | Bắt đầu khi hết đếm ngược và các ô hiện ra ("Bắt đầu!"). |
-| Sang màn tiếp theo, chơi lại màn, đấu lại | Chạy tiếp, không ngắt, không phát lại từ đầu (scene khởi động lại nhưng bộ phát nhạc nằm ngoài scene). Đấu lại: nhạc đã tắt lúc có kết quả, nên bắt đầu lại khi trận mới bắt đầu. |
+| Sang màn tiếp theo | Chạy tiếp, không ngắt, không phát lại từ đầu (scene khởi động lại nhưng bộ phát nhạc nằm ngoài scene). |
+| Chơi lại màn, đấu lại | Nhạc đã tắt lúc thua (hay tạm dừng) hoặc lúc có kết quả trận, nên bắt đầu lại: chơi lại thì ngay khi vào màn, đấu lại thì khi trận mới bắt đầu. |
 | Hộp Tạm dừng mở | Ngưng; "Tiếp tục" thì chạy tiếp. Phát lại từ đầu vòng hay từ chỗ dừng đều được. |
 | App xuống nền | Im ngay. Lúc quay lại game đang ở hộp Tạm dừng (một mình) nên nhạc vẫn ngưng; đấu online thì nhạc chạy tiếp. |
 | Qua màn | `clear` hạ nhạc trong lúc phát rồi nhạc chạy tiếp dưới hộp "Qua màn!" và sang màn sau. |

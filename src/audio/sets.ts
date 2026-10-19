@@ -8,9 +8,44 @@ import { bell, hz, jit, marimba, penta, woodTick, type Voices } from './voices';
  * Ngẫu nhiên (độ lệch cao độ, tiếng xáo) dùng Math.random, không bao giờ dùng rng của bàn.
  */
 
-export type SfxName = 'select' | 'deselect' | 'match' | 'wrong' | 'hint' | 'shuffle' | 'clear' | 'lose';
+/**
+ * Các hiệu ứng. Ngoài tiếng khi chơi và khi hết màn còn có: bấm nút (tap), đếm ngược 3-2-1 (count) và "Bắt đầu!" (go)
+ * khi đấu online, thanh giờ chuyển đỏ (warn), tích 10 giây cuối (tick), đá vỡ (crack), gửi đòn khi đấu online (launch).
+ */
+export type SfxName =
+  | 'select'
+  | 'deselect'
+  | 'match'
+  | 'wrong'
+  | 'hint'
+  | 'shuffle'
+  | 'clear'
+  | 'lose'
+  | 'tap'
+  | 'count'
+  | 'go'
+  | 'warn'
+  | 'tick'
+  | 'crack'
+  | 'launch';
 
-export const SFX_NAMES: readonly SfxName[] = ['select', 'deselect', 'match', 'wrong', 'hint', 'shuffle', 'clear', 'lose'];
+export const SFX_NAMES: readonly SfxName[] = [
+  'select',
+  'deselect',
+  'match',
+  'wrong',
+  'hint',
+  'shuffle',
+  'clear',
+  'lose',
+  'tap',
+  'count',
+  'go',
+  'warn',
+  'tick',
+  'crack',
+  'launch',
+];
 
 /** Một vòng nhạc dài 8 ô nhịp, mỗi ô 16 nốt móc kép. */
 export const LOOP_STEPS = 128;
@@ -25,10 +60,13 @@ export interface SoundSet {
   id: SoundSetId;
   name: string;
   desc: string;
-  /** `step` là bậc cao độ theo chuỗi, chỉ tiếng nối cặp dùng. */
+  /** `step`: bậc cao độ theo chuỗi với tiếng nối cặp; 1 là bản gấp (3 giây cuối) với tiếng tích; tiếng khác bỏ qua. */
   sfx: Record<SfxName, (v: Voices, t: number, step: number) => void>;
   hit: Record<AttackKind, (v: Voices, t: number) => void>;
+  /** Nhạc trong màn chơi. */
   music: MusicDef;
+  /** Nhạc ở menu: chậm và thưa hơn nhạc trong màn chơi. */
+  menuMusic: MusicDef;
 }
 
 /** Một nốt trong giai điệu: [nốt móc kép trong ô nhịp, số MIDI, độ dài tính bằng nốt móc kép]. */
@@ -60,6 +98,24 @@ const WOOD_BELLS: [number, number][][] = [
 ];
 /** Hợp âm rải: nốt móc kép → chỉ số nốt trong hợp âm. */
 const WOOD_ARP: Record<number, number> = { 0: 0, 3: 2, 6: 1, 8: 3, 11: 2, 14: 1 };
+
+const WOOD_MENU_CHORDS = [
+  [53, 57, 60, 64],
+  [52, 55, 59, 62],
+  [50, 53, 57, 60],
+  [48, 52, 55, 59],
+];
+const WOOD_MENU_BELLS: [number, number][][] = [
+  [[8, 88]],
+  [[8, 86]],
+  [[4, 84], [12, 81]],
+  [[8, 79]],
+  [[0, 88], [8, 91]],
+  [[8, 86]],
+  [[4, 84], [8, 86], [12, 88]],
+  [[8, 84]],
+];
+const WOOD_MENU_ARP: Record<number, number> = { 0: 1, 4: 2, 8: 3, 12: 2 };
 
 const WOOD: SoundSet = {
   id: 'wood',
@@ -104,6 +160,45 @@ const WOOD: SoundSet = {
       marimba(v, t + 0.48, 60, 0.26, 1.3);
       marimba(v, t + 0.48, 48, 0.12, 1.3);
     },
+    tap(v, t) {
+      const j = jit();
+      v.tone({ t, f: 700 * j, to: 560 * j, glide: 0.03, gain: 0.18, attack: 0.001, dur: 0.045 });
+      v.noise({ t, f: 1800, q: 1.5, gain: 0.05, dur: 0.008 });
+    },
+    count(v, t) {
+      marimba(v, t, 79, 0.24, 0.3);
+      woodTick(v, t, 1600, 0.1);
+    },
+    go(v, t) {
+      marimba(v, t, 84, 0.3, 0.7);
+      marimba(v, t, 88, 0.22, 0.7);
+      bell(v, t, 96, 0.1, 1.2);
+    },
+    warn(v, t) {
+      bell(v, t, 88, 0.13, 0.7);
+      bell(v, t + 0.2, 84, 0.13, 1.0);
+    },
+    tick(v, t, step) {
+      if (step === 1) {
+        woodTick(v, t, 1500, 0.18);
+        marimba(v, t, 84, 0.08, 0.15);
+      } else {
+        woodTick(v, t, 1000, 0.12);
+      }
+    },
+    crack(v, t) {
+      v.noise({ t, f: 2500, q: 3, gain: 0.25, dur: 0.03 });
+      v.noise({ t, kind: 'lowpass', f: 900, q: 0.7, gain: 0.2, dur: 0.12 });
+      v.tone({ t, type: 'triangle', f: 180, to: 80, glide: 0.12, gain: 0.25, attack: 0.002, dur: 0.15 });
+      // Sỏi lạo xạo
+      for (let i = 0; i < 6; i++)
+        v.noise({ t: t + 0.04 + i * 0.035 + Math.random() * 0.02, f: 3000 + Math.random() * 3000, q: 2, gain: 0.05, dur: 0.01 });
+    },
+    launch(v, t) {
+      v.sweep({ t, from: 500, to: 3500, dur: 0.25, gain: 0.08 });
+      marimba(v, t + 0.08, 84, 0.2, 0.3);
+      marimba(v, t + 0.16, 91, 0.22, 0.5);
+    },
   },
   hit: {
     stone(v, t) {
@@ -139,6 +234,18 @@ const WOOD: SoundSet = {
       if (st % 4 === 2) v.noise({ t, kind: 'highpass', f: 7000, q: 0.7, gain: 0.012, attack: 0.005, dur: 0.05, out });
     },
   },
+  // Marimba và chuông thong thả, kiểu sảnh chờ
+  menuMusic: {
+    bpm: 72,
+    play(v, s, t, out) {
+      const bar = Math.floor(s / 16);
+      const st = s % 16;
+      const ch = WOOD_MENU_CHORDS[bar % 4];
+      if (st === 0) marimba(v, t, ch[0], 0.09, 1.2, out);
+      if (st in WOOD_MENU_ARP) marimba(v, t, ch[WOOD_MENU_ARP[st]] + 12, 0.05, 0.8, out);
+      for (const [ms, m] of WOOD_MENU_BELLS[bar]) if (ms === st) bell(v, t, m, 0.04, 1.6, out);
+    },
+  },
 };
 
 // ---------------- Bong bóng: pop vui nhộn ----------------
@@ -165,6 +272,23 @@ const BUBBLE_MELODY: Note[][] = [
   [[0, 74, 2], [2, 79, 2], [4, 83, 4], [8, 86, 4], [12, 83, 4]],
   [[0, 83, 2], [2, 79, 2], [4, 76, 4], [8, 79, 2], [10, 76, 2], [12, 74, 4]],
   [[0, 72, 8], [12, 76, 2], [14, 79, 2]],
+];
+
+const BUBBLE_MENU_CHORDS = [
+  [60, 64, 67],
+  [57, 60, 64],
+  [53, 57, 60],
+  [55, 59, 62],
+];
+const BUBBLE_MENU_MELODY: Note[][] = [
+  [[0, 84, 4], [4, 88, 4], [8, 91, 8]],
+  [[0, 88, 4], [4, 84, 4], [8, 81, 8]],
+  [[0, 81, 4], [4, 84, 4], [8, 86, 4], [12, 84, 4]],
+  [[0, 83, 8], [8, 86, 8]],
+  [[0, 84, 4], [4, 88, 4], [8, 91, 4], [12, 93, 4]],
+  [[0, 91, 4], [4, 88, 4], [8, 84, 8]],
+  [[0, 86, 4], [4, 84, 4], [8, 81, 4], [12, 84, 4]],
+  [[0, 84, 12]],
 ];
 
 const BUBBLE: SoundSet = {
@@ -231,6 +355,40 @@ const BUBBLE: SoundSet = {
         vib: { rate: 6, depth: 9 },
       });
     },
+    tap(v, t) {
+      const j = jit(0.05);
+      v.tone({ t, f: 300 * j, to: 700 * j, glide: 0.025, gain: 0.18, attack: 0.002, dur: 0.04 });
+    },
+    count(v, t) {
+      v.tone({ t, f: 500, to: 900, glide: 0.05, gain: 0.25, attack: 0.003, dur: 0.12 });
+      v.tone({ t, type: 'triangle', f: hz(79), gain: 0.08, dur: 0.15 });
+    },
+    go(v, t) {
+      v.tone({ t, f: 400, to: 1600, glide: 0.06, gain: 0.3, attack: 0.003, dur: 0.1 });
+      [84, 88, 91].forEach((m) => v.tone({ t: t + 0.06, type: 'triangle', f: hz(m), gain: 0.12, attack: 0.005, dur: 0.5 }));
+      v.noise({ t: t + 0.06, kind: 'highpass', f: 6000, q: 0.5, gain: 0.04, attack: 0.01, dur: 0.3 });
+    },
+    warn(v, t) {
+      v.tone({ t, type: 'triangle', f: hz(81), to: hz(81) * 0.97, glide: 0.18, gain: 0.2, attack: 0.005, dur: 0.2 });
+      v.tone({ t: t + 0.2, type: 'triangle', f: hz(76), to: hz(76) * 0.97, glide: 0.28, gain: 0.2, attack: 0.005, dur: 0.3 });
+    },
+    tick(v, t, step) {
+      if (step === 1) v.tone({ t, f: 1300, to: 1600, glide: 0.02, gain: 0.16, attack: 0.002, dur: 0.05 });
+      else v.tone({ t, f: 900, to: 1100, glide: 0.02, gain: 0.12, attack: 0.002, dur: 0.04 });
+    },
+    crack(v, t) {
+      v.tone({ t, f: 900, to: 150, glide: 0.1, gain: 0.3, attack: 0.002, dur: 0.12 });
+      v.noise({ t, kind: 'lowpass', f: 1500, q: 0.7, gain: 0.18, dur: 0.1 });
+      // Sỏi lăn lóc cóc
+      for (let i = 0; i < 5; i++) {
+        const f = 200 + Math.random() * 300;
+        v.tone({ t: t + 0.08 + i * 0.04, f, to: f * 1.6, glide: 0.02, gain: 0.06, attack: 0.002, dur: 0.03 });
+      }
+    },
+    launch(v, t) {
+      v.tone({ t, f: 400, to: 1800, glide: 0.25, gain: 0.2, attack: 0.01, dur: 0.28 });
+      v.tone({ t: t + 0.22, type: 'triangle', f: hz(91), gain: 0.12, dur: 0.3 });
+    },
   },
   hit: {
     stone(v, t) {
@@ -272,6 +430,28 @@ const BUBBLE: SoundSet = {
       if (st === 4 || st === 12) v.noise({ t, f: 1500, q: 1.2, gain: 0.035, attack: 0.002, dur: 0.05, out });
     },
   },
+  // Hộp nhạc nhẹ nhàng, gần như nhạc ru
+  menuMusic: {
+    bpm: 96,
+    play(v, s, t, out, sd) {
+      const bar = Math.floor(s / 16);
+      const st = s % 16;
+      const ch = BUBBLE_MENU_CHORDS[bar % 4];
+      if (st === 0 || st === 8) {
+        const f = hz(ch[0]);
+        v.tone({ t, f: f * 0.85, to: f, glide: 0.04, gain: 0.1, dur: 0.25, out });
+      }
+      if (st === 4 || st === 12) {
+        for (const m of ch) v.tone({ t, type: 'triangle', f: hz(m + 12), gain: 0.018, attack: 0.01, dur: 0.3, out });
+        v.noise({ t, kind: 'highpass', f: 8000, q: 0.7, gain: 0.008, attack: 0.002, dur: 0.03, out });
+      }
+      for (const [ms, m, len] of BUBBLE_MENU_MELODY[bar]) {
+        if (ms !== st) continue;
+        v.tone({ t, type: 'triangle', f: hz(m), gain: 0.05, attack: 0.005, dur: len * sd * 0.9, out });
+        v.tone({ t, f: hz(m) * 2, gain: 0.012, attack: 0.005, dur: len * sd * 0.5, out });
+      }
+    },
+  },
 };
 
 // ---------------- 8-bit: máy game cổ ----------------
@@ -310,6 +490,24 @@ const CHIP_MELODY: Note[][] = [
   [[0, 84, 4], [4, 81, 2], [6, 77, 2], [8, 81, 4], [12, 77, 4]],
   [[0, 79, 2], [2, 76, 2], [4, 72, 2], [6, 76, 2], [8, 79, 4], [12, 84, 4]],
   [[0, 83, 4], [4, 79, 4], [8, 74, 4], [12, 71, 4]],
+];
+
+const CHIP_MENU_ARPS = [
+  [60, 64, 67],
+  [59, 62, 67],
+  [57, 60, 64],
+  [57, 60, 65],
+];
+const CHIP_MENU_BASS = [48, 55, 57, 53];
+const CHIP_MENU_MELODY: Note[][] = [
+  [[0, 72, 2], [2, 76, 2], [4, 79, 4], [8, 84, 4], [12, 79, 4]],
+  [[0, 83, 4], [4, 79, 2], [6, 74, 2], [8, 79, 8]],
+  [[0, 81, 2], [2, 84, 2], [4, 88, 4], [8, 84, 4], [12, 81, 4]],
+  [[0, 77, 4], [4, 81, 4], [8, 84, 6], [14, 83, 2]],
+  [[0, 84, 2], [2, 83, 2], [4, 79, 4], [8, 76, 4], [12, 79, 4]],
+  [[0, 74, 4], [4, 79, 4], [8, 83, 4], [12, 86, 4]],
+  [[0, 84, 4], [4, 81, 4], [8, 76, 4], [12, 81, 4]],
+  [[0, 77, 4], [4, 79, 4], [8, 72, 8]],
 ];
 
 const CHIP: SoundSet = {
@@ -353,6 +551,41 @@ const CHIP: SoundSet = {
       chipRun(v, t, [[72, 0.13], [67, 0.13], [63, 0.13], [62, 0.13], [60, 0.6]], 0.09, 0.3);
       v.tone({ t: t + 0.52, type: 'triangle', f: hz(48), gain: 0.18, attack: 0.001, hold: 0.5, dur: 0.3 });
     },
+    tap(v, t) {
+      v.tone({ t, type: 'pulse', f: 660, gain: 0.06, attack: 0.001, hold: 0.015, dur: 0.01 });
+    },
+    count(v, t) {
+      v.tone({ t, type: 'pulse', f: hz(81), gain: 0.09, attack: 0.001, hold: 0.12, dur: 0.03 });
+    },
+    go(v, t) {
+      v.tone({ t, type: 'pulse', f: hz(93), gain: 0.1, attack: 0.001, hold: 0.4, dur: 0.15 });
+      v.tone({ t, type: 'pulse12', f: hz(88), gain: 0.05, attack: 0.001, hold: 0.4, dur: 0.15 });
+    },
+    warn(v, t) {
+      [1047, 784, 1047, 784].forEach((f, i) =>
+        v.tone({ t: t + i * 0.09, type: 'pulse', f, gain: 0.07, attack: 0.001, hold: 0.06, dur: 0.01 }),
+      );
+    },
+    tick(v, t, step) {
+      if (step === 1) {
+        v.tone({ t, type: 'pulse', f: 1600, gain: 0.08, attack: 0.001, hold: 0.03, dur: 0.01 });
+        v.noise({ t, kind: 'highpass', f: 5000, q: 0.7, gain: 0.03, dur: 0.02 });
+      } else {
+        v.tone({ t, type: 'pulse', f: 1200, gain: 0.06, attack: 0.001, hold: 0.02, dur: 0.01 });
+      }
+    },
+    crack(v, t) {
+      v.noise({ t, kind: 'lowpass', f: 2000, q: 0.7, gain: 0.3, attack: 0.001, dur: 0.2 });
+      v.tone({ t, type: 'square', f: 150, to: 40, glide: 0.2, gain: 0.08, attack: 0.001, dur: 0.2 });
+      // Đá vụn rơi lộp độp
+      for (let i = 0; i < 4; i++)
+        v.noise({ t: t + 0.08 + i * 0.05, kind: 'lowpass', f: 1200, q: 0.7, gain: 0.12 * (1 - i * 0.2), attack: 0.001, dur: 0.03 });
+    },
+    launch(v, t) {
+      for (let i = 0; i < 8; i++)
+        v.tone({ t: t + i * 0.025, type: 'pulse', f: 400 * Math.pow(1.25, i), gain: 0.07, attack: 0.001, hold: 0.018, dur: 0.006 });
+      v.tone({ t: t + 0.2, type: 'pulse', f: hz(96), gain: 0.08, attack: 0.001, hold: 0.1, dur: 0.08 });
+    },
   },
   hit: {
     stone(v, t) {
@@ -390,6 +623,25 @@ const CHIP: SoundSet = {
       if (st % 2 === 0) v.noise({ t, kind: 'highpass', f: 7000, q: 0.7, gain: 0.02, attack: 0.001, dur: 0.02, out });
       if (st === 4 || st === 12) v.noise({ t, f: 1800, q: 0.8, gain: 0.06, attack: 0.001, dur: 0.08, out });
       if (st === 0 || st === 8 || st === 10) v.tone({ t, f: 180, to: 50, glide: 0.07, gain: 0.2, attack: 0.001, dur: 0.08, out });
+    },
+  },
+  // Màn hình tiêu đề của máy game cổ
+  menuMusic: {
+    bpm: 100,
+    play(v, s, t, out, sd) {
+      const bar = Math.floor(s / 16);
+      const st = s % 16;
+      const i = bar % 4;
+      if (st % 4 === 0)
+        v.tone({ t, type: 'triangle', f: hz(CHIP_MENU_BASS[i] + (st % 8 === 4 ? 7 : 0)), gain: 0.14, attack: 0.001, hold: sd * 3, dur: 0.03, out });
+      if (st % 2 === 0)
+        v.tone({ t, type: 'pulse12', f: hz(CHIP_MENU_ARPS[i][(st / 2) % 3] + 12), gain: 0.02, attack: 0.001, hold: sd * 1.2, dur: 0.01, out });
+      for (const [ms, m, len] of CHIP_MENU_MELODY[bar]) {
+        if (ms === st) v.tone({ t, type: 'pulse', f: hz(m), gain: 0.05, attack: 0.002, hold: len * sd * 0.75, dur: len * sd * 0.2, out });
+      }
+      if (st % 2 === 0) v.noise({ t, kind: 'highpass', f: 7000, q: 0.7, gain: 0.012, attack: 0.001, dur: 0.02, out });
+      if (st === 4 || st === 12) v.noise({ t, f: 1800, q: 0.8, gain: 0.04, attack: 0.001, dur: 0.07, out });
+      if (st === 0 || st === 8) v.tone({ t, f: 170, to: 50, glide: 0.07, gain: 0.15, attack: 0.001, dur: 0.08, out });
     },
   },
 };

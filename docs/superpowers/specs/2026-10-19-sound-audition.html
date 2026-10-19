@@ -198,7 +198,7 @@
     <section class="panel" aria-labelledby="cmp-title">
       <h2 id="cmp-title">So sánh từng lúc</h2>
       <div class="matrix" id="matrix"></div>
-      <p class="note">Mọi âm thanh và nhạc ở đây được tạo bằng code (Web Audio), không dùng file nào, nhạc nền lặp khoảng 16–22 giây một vòng. Loa tablet nghe âm trầm kém, nên hãy thử trên máy thật trước khi chốt.</p>
+      <p class="note">Mọi âm thanh và nhạc ở đây được tạo bằng code (Web Audio), không dùng file nào, nhạc nền lặp khoảng 16–27 giây một vòng. Các nút trên trang này (Nhạc nền, Ván mới, chọn bộ) phát tiếng bấm nút của bộ đang chọn. Loa tablet nghe âm trầm kém, nên hãy thử trên máy thật trước khi chốt.</p>
     </section>
   </div>
 </div>
@@ -363,6 +363,43 @@
         marimba(t + 0.48, 60, 0.26, 1.3);
         marimba(t + 0.48, 48, 0.12, 1.3);
       },
+      tap(t) {
+        const j = jit();
+        tone({ t, f: 700 * j, to: 560 * j, glide: 0.03, gain: 0.18, attack: 0.001, dur: 0.045 });
+        noise({ t, f: 1800, q: 1.5, gain: 0.05, dur: 0.008 });
+      },
+      count(t) {
+        marimba(t, 79, 0.24, 0.3);
+        woodTick(t, 1600, 0.1);
+      },
+      go(t) {
+        marimba(t, 84, 0.3, 0.7);
+        marimba(t, 88, 0.22, 0.7);
+        bell(t, 96, 0.1, 1.2);
+      },
+      warn(t) {
+        bell(t, 88, 0.13, 0.7);
+        bell(t + 0.2, 84, 0.13, 1.0);
+      },
+      tick(t, urgent) {
+        if (urgent) {
+          woodTick(t, 1500, 0.18);
+          marimba(t, 84, 0.08, 0.15);
+        } else {
+          woodTick(t, 1000, 0.12);
+        }
+      },
+      crack(t) {
+        noise({ t, f: 2500, q: 3, gain: 0.25, dur: 0.03 });
+        noise({ t, kind: 'lowpass', f: 900, q: 0.7, gain: 0.2, dur: 0.12 });
+        tone({ t, type: 'triangle', f: 180, to: 80, glide: 0.12, gain: 0.25, attack: 0.002, dur: 0.15 });
+        for (let i = 0; i < 6; i++) noise({ t: t + 0.04 + i * 0.035 + Math.random() * 0.02, f: 3000 + Math.random() * 3000, q: 2, gain: 0.05, dur: 0.01 });
+      },
+      launch(t) {
+        sweep({ t, from: 500, to: 3500, dur: 0.25, gain: 0.08 });
+        marimba(t + 0.08, 84, 0.2, 0.3);
+        marimba(t + 0.16, 91, 0.22, 0.5);
+      },
       hit: {
         stone(t) {
           tone({ t, type: 'triangle', f: 220, to: 90, glide: 0.15, gain: 0.4, attack: 0.002, dur: 0.18 });
@@ -436,6 +473,39 @@
         [67, 66, 65].forEach((m, i) => tone({ t: t + i * 0.28, type: 'triangle', f: hz(m), to: hz(m) * 0.97, glide: 0.25, gain: 0.22, attack: 0.01, dur: 0.24 }));
         tone({ t: t + 0.84, type: 'triangle', f: hz(64), to: hz(64) * 0.94, glide: 0.8, gain: 0.22, attack: 0.01, hold: 0.3, dur: 0.5, vib: { rate: 6, depth: 9 } });
       },
+      tap(t) {
+        const j = jit(0.05);
+        tone({ t, f: 300 * j, to: 700 * j, glide: 0.025, gain: 0.18, attack: 0.002, dur: 0.04 });
+      },
+      count(t) {
+        tone({ t, f: 500, to: 900, glide: 0.05, gain: 0.25, attack: 0.003, dur: 0.12 });
+        tone({ t, type: 'triangle', f: hz(79), gain: 0.08, dur: 0.15 });
+      },
+      go(t) {
+        tone({ t, f: 400, to: 1600, glide: 0.06, gain: 0.3, attack: 0.003, dur: 0.1 });
+        [84, 88, 91].forEach((m) => tone({ t: t + 0.06, type: 'triangle', f: hz(m), gain: 0.12, attack: 0.005, dur: 0.5 }));
+        noise({ t: t + 0.06, kind: 'highpass', f: 6000, q: 0.5, gain: 0.04, attack: 0.01, dur: 0.3 });
+      },
+      warn(t) {
+        tone({ t, type: 'triangle', f: hz(81), to: hz(81) * 0.97, glide: 0.18, gain: 0.2, attack: 0.005, dur: 0.2 });
+        tone({ t: t + 0.2, type: 'triangle', f: hz(76), to: hz(76) * 0.97, glide: 0.28, gain: 0.2, attack: 0.005, dur: 0.3 });
+      },
+      tick(t, urgent) {
+        if (urgent) tone({ t, f: 1300, to: 1600, glide: 0.02, gain: 0.16, attack: 0.002, dur: 0.05 });
+        else tone({ t, f: 900, to: 1100, glide: 0.02, gain: 0.12, attack: 0.002, dur: 0.04 });
+      },
+      crack(t) {
+        tone({ t, f: 900, to: 150, glide: 0.1, gain: 0.3, attack: 0.002, dur: 0.12 });
+        noise({ t, kind: 'lowpass', f: 1500, q: 0.7, gain: 0.18, dur: 0.1 });
+        for (let i = 0; i < 5; i++) {
+          const f = 200 + Math.random() * 300;
+          tone({ t: t + 0.08 + i * 0.04, f, to: f * 1.6, glide: 0.02, gain: 0.06, attack: 0.002, dur: 0.03 });
+        }
+      },
+      launch(t) {
+        tone({ t, f: 400, to: 1800, glide: 0.25, gain: 0.2, attack: 0.01, dur: 0.28 });
+        tone({ t: t + 0.22, type: 'triangle', f: hz(91), gain: 0.12, dur: 0.3 });
+      },
       hit: {
         stone(t) {
           tone({ t, f: 700, to: 200, glide: 0.08, gain: 0.35, attack: 0.002, dur: 0.12 });
@@ -506,6 +576,36 @@
           x += d;
         });
         tone({ t: t + 0.52, type: 'triangle', f: hz(48), gain: 0.18, attack: 0.001, hold: 0.5, dur: 0.3 });
+      },
+      tap(t) {
+        tone({ t, wave: pulse, f: 660, gain: 0.06, attack: 0.001, hold: 0.015, dur: 0.01 });
+      },
+      count(t) {
+        tone({ t, wave: pulse, f: hz(81), gain: 0.09, attack: 0.001, hold: 0.12, dur: 0.03 });
+      },
+      go(t) {
+        tone({ t, wave: pulse, f: hz(93), gain: 0.1, attack: 0.001, hold: 0.4, dur: 0.15 });
+        tone({ t, wave: pulse12, f: hz(88), gain: 0.05, attack: 0.001, hold: 0.4, dur: 0.15 });
+      },
+      warn(t) {
+        [1047, 784, 1047, 784].forEach((f, i) => tone({ t: t + i * 0.09, wave: pulse, f, gain: 0.07, attack: 0.001, hold: 0.06, dur: 0.01 }));
+      },
+      tick(t, urgent) {
+        if (urgent) {
+          tone({ t, wave: pulse, f: 1600, gain: 0.08, attack: 0.001, hold: 0.03, dur: 0.01 });
+          noise({ t, kind: 'highpass', f: 5000, q: 0.7, gain: 0.03, dur: 0.02 });
+        } else {
+          tone({ t, wave: pulse, f: 1200, gain: 0.06, attack: 0.001, hold: 0.02, dur: 0.01 });
+        }
+      },
+      crack(t) {
+        noise({ t, kind: 'lowpass', f: 2000, q: 0.7, gain: 0.3, attack: 0.001, dur: 0.2 });
+        tone({ t, type: 'square', f: 150, to: 40, glide: 0.2, gain: 0.08, attack: 0.001, dur: 0.2 });
+        for (let i = 0; i < 4; i++) noise({ t: t + 0.08 + i * 0.05, kind: 'lowpass', f: 1200, q: 0.7, gain: 0.12 * (1 - i * 0.2), attack: 0.001, dur: 0.03 });
+      },
+      launch(t) {
+        for (let i = 0; i < 8; i++) tone({ t: t + i * 0.025, wave: pulse, f: 400 * Math.pow(1.25, i), gain: 0.07, attack: 0.001, hold: 0.018, dur: 0.006 });
+        tone({ t: t + 0.2, wave: pulse, f: hz(96), gain: 0.08, attack: 0.001, hold: 0.1, dur: 0.08 });
       },
       hit: {
         stone(t) {
@@ -607,19 +707,96 @@
       },
     },
   };
+  // Nhạc menu: chậm và thưa hơn nhạc trong màn chơi, cũng 8 ô nhịp
+  const MENU_MUSIC = {
+    // Marimba và chuông thong thả, kiểu sảnh chờ
+    wood: {
+      bpm: 72,
+      chords: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]],
+      bells: [
+        [[8, 88]], [[8, 86]], [[4, 84], [12, 81]], [[8, 79]],
+        [[0, 88], [8, 91]], [[8, 86]], [[4, 84], [8, 86], [12, 88]], [[8, 84]],
+      ],
+      play(s, t, out) {
+        const bar = Math.floor(s / 16), st = s % 16, ch = this.chords[bar % 4];
+        if (st === 0) marimba(t, ch[0], 0.09, 1.2, out);
+        const arp = { 0: 1, 4: 2, 8: 3, 12: 2 };
+        if (st in arp) marimba(t, ch[arp[st]] + 12, 0.05, 0.8, out);
+        for (const [ms, m] of this.bells[bar]) if (ms === st) bell(t, m, 0.04, 1.6, out);
+      },
+    },
+    // Hộp nhạc nhẹ nhàng, gần như nhạc ru
+    bubble: {
+      bpm: 96,
+      chords: [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]],
+      melody: [
+        [[0, 84, 4], [4, 88, 4], [8, 91, 8]],
+        [[0, 88, 4], [4, 84, 4], [8, 81, 8]],
+        [[0, 81, 4], [4, 84, 4], [8, 86, 4], [12, 84, 4]],
+        [[0, 83, 8], [8, 86, 8]],
+        [[0, 84, 4], [4, 88, 4], [8, 91, 4], [12, 93, 4]],
+        [[0, 91, 4], [4, 88, 4], [8, 84, 8]],
+        [[0, 86, 4], [4, 84, 4], [8, 81, 4], [12, 84, 4]],
+        [[0, 84, 12]],
+      ],
+      play(s, t, out, sd) {
+        const bar = Math.floor(s / 16), st = s % 16, ch = this.chords[bar % 4];
+        if (st === 0 || st === 8) {
+          const f = hz(ch[0]);
+          tone({ t, f: f * 0.85, to: f, glide: 0.04, gain: 0.1, dur: 0.25, out });
+        }
+        if (st === 4 || st === 12) {
+          for (const m of ch) tone({ t, type: 'triangle', f: hz(m + 12), gain: 0.018, attack: 0.01, dur: 0.3, out });
+          noise({ t, kind: 'highpass', f: 8000, q: 0.7, gain: 0.008, attack: 0.002, dur: 0.03, out });
+        }
+        for (const [ms, m, len] of this.melody[bar]) {
+          if (ms !== st) continue;
+          tone({ t, type: 'triangle', f: hz(m), gain: 0.05, attack: 0.005, dur: len * sd * 0.9, out });
+          tone({ t, f: hz(m) * 2, gain: 0.012, attack: 0.005, dur: len * sd * 0.5, out });
+        }
+      },
+    },
+    // Màn hình tiêu đề của máy game cổ
+    chip: {
+      bpm: 100,
+      arps: [[60, 64, 67], [59, 62, 67], [57, 60, 64], [57, 60, 65]],
+      bass: [48, 55, 57, 53],
+      melody: [
+        [[0, 72, 2], [2, 76, 2], [4, 79, 4], [8, 84, 4], [12, 79, 4]],
+        [[0, 83, 4], [4, 79, 2], [6, 74, 2], [8, 79, 8]],
+        [[0, 81, 2], [2, 84, 2], [4, 88, 4], [8, 84, 4], [12, 81, 4]],
+        [[0, 77, 4], [4, 81, 4], [8, 84, 6], [14, 83, 2]],
+        [[0, 84, 2], [2, 83, 2], [4, 79, 4], [8, 76, 4], [12, 79, 4]],
+        [[0, 74, 4], [4, 79, 4], [8, 83, 4], [12, 86, 4]],
+        [[0, 84, 4], [4, 81, 4], [8, 76, 4], [12, 81, 4]],
+        [[0, 77, 4], [4, 79, 4], [8, 72, 8]],
+      ],
+      play(s, t, out, sd) {
+        const bar = Math.floor(s / 16), st = s % 16, i = bar % 4;
+        if (st % 4 === 0) tone({ t, type: 'triangle', f: hz(this.bass[i] + (st % 8 === 4 ? 7 : 0)), gain: 0.14, attack: 0.001, hold: sd * 3, dur: 0.03, out });
+        if (st % 2 === 0) tone({ t, wave: pulse12, f: hz(this.arps[i][(st / 2) % 3] + 12), gain: 0.02, attack: 0.001, hold: sd * 1.2, dur: 0.01, out });
+        for (const [ms, m, len] of this.melody[bar]) {
+          if (ms === st) tone({ t, wave: pulse, f: hz(m), gain: 0.05, attack: 0.002, hold: len * sd * 0.75, dur: len * sd * 0.2, out });
+        }
+        if (st % 2 === 0) noise({ t, kind: 'highpass', f: 7000, q: 0.7, gain: 0.012, attack: 0.001, dur: 0.02, out });
+        if (st === 4 || st === 12) noise({ t, f: 1800, q: 0.8, gain: 0.04, attack: 0.001, dur: 0.07, out });
+        if (st === 0 || st === 8) tone({ t, f: 170, to: 50, glide: 0.07, gain: 0.15, attack: 0.001, dur: 0.08, out });
+      },
+    },
+  };
   const LOOP_STEPS = 8 * 16;
   let music = null;
 
-  function startMusic(id) {
+  function startMusic(id, kind = 'game') {
     stopMusic();
     const t0 = ac() + 0.05;
-    const M = MUSIC[id];
+    const M = (kind === 'menu' ? MENU_MUSIC : MUSIC)[id];
     const sd = 60 / M.bpm / 4;
     const fade = ctx.createGain();
     fade.gain.setValueAtTime(0.0001, t0);
     fade.gain.exponentialRampToValueAtTime(1, t0 + 0.6);
     fade.connect(duckNode);
-    music = { id, step: 0, next: t0, fade, timer: 0 };
+    music = { id, kind, step: 0, next: t0, fade, timer: 0 };
     const m = music;
     const tick = () => {
       // Tab bị ẩn làm đồng hồ chậm: bỏ qua phần đã lỡ thay vì phát dồn một lúc
@@ -669,21 +846,32 @@
       { id: 'match', name: 'Nối cặp', desc: 'Một cặp', ms: 700 },
       { id: 'chain', name: 'Nối chuỗi', desc: '6 cặp liền, nốt leo dần', ms: 2900 },
       { id: 'wrong', name: 'Không nối được', desc: 'Cùng hình, đường bị chặn', ms: 400 },
-      { id: 'hint', name: 'Gợi ý', desc: 'Nút bóng đèn', ms: 1000, isNew: true },
-      { id: 'shuffle', name: 'Đảo bàn', desc: 'Tự bấm, hoặc bàn hết nước', ms: 500, isNew: true },
+      { id: 'hint', name: 'Gợi ý', desc: 'Nút bóng đèn', ms: 1000 },
+      { id: 'shuffle', name: 'Đảo bàn', desc: 'Tự bấm, hoặc bàn hết nước', ms: 500 },
+      { id: 'crack-seq', name: 'Đá vỡ', desc: 'Đảo bàn làm vỡ đá (nghe kèm tiếng đảo)', ms: 800, isNew: true },
+    ] },
+    { name: 'Thời gian', items: [
+      { id: 'warn', name: 'Thanh giờ chuyển đỏ', desc: 'Báo một lần', ms: 900, isNew: true },
+      { id: 'tick-seq', name: '10 giây cuối', desc: 'Nghe thử 5 giây cuối: 3 giây cuối gấp hơn', ms: 4800, isNew: true },
     ] },
     { name: 'Hết màn', items: [
       { id: 'clear', name: 'Qua màn', desc: 'Cũng dùng khi thắng trận online', ms: 1900 },
-      { id: 'lose', name: 'Thua', desc: 'Hết giờ, hết nước, thua trận online', ms: 1800, isNew: true },
+      { id: 'lose', name: 'Thua', desc: 'Hết giờ, hết nước, thua trận online', ms: 1800 },
     ] },
-    { name: 'Đấu online: bị tấn công', items: [
-      { id: 'hit-stone', name: 'Bị thả đá', desc: 'Đá rơi vào bàn', ms: 400, isNew: true },
-      { id: 'hit-tilt', name: 'Bị nghiêng bàn', desc: 'Các ô trượt về một phía', ms: 500, isNew: true },
-      { id: 'hit-fog', name: 'Bị che mắt', desc: 'Bàn bị che vài giây', ms: 900, isNew: true },
-      { id: 'hit-shuffle', name: 'Bị đảo bàn', desc: 'Đối thủ xáo bàn của bạn', ms: 800, isNew: true },
+    { name: 'Đấu online', items: [
+      { id: 'countdown', name: 'Đếm ngược', desc: '3, 2, 1, Bắt đầu!', ms: 4200, isNew: true },
+      { id: 'launch-seq', name: 'Gửi đòn', desc: 'Chuỗi đủ dài (nghe kèm tiếng nối cặp)', ms: 900, isNew: true },
+      { id: 'hit-stone', name: 'Bị thả đá', desc: 'Đá rơi vào bàn', ms: 400 },
+      { id: 'hit-tilt', name: 'Bị nghiêng bàn', desc: 'Các ô trượt về một phía', ms: 500 },
+      { id: 'hit-fog', name: 'Bị che mắt', desc: 'Bàn bị che vài giây', ms: 900 },
+      { id: 'hit-shuffle', name: 'Bị đảo bàn', desc: 'Đối thủ xáo bàn của bạn', ms: 800 },
+    ] },
+    { name: 'Giao diện', items: [
+      { id: 'tap', name: 'Bấm nút', desc: 'Mọi nút ở menu, hộp thoại, HUD', ms: 200, isNew: true },
     ] },
     { name: 'Nhạc nền', items: [
-      { id: 'music', name: 'Nhạc nền', desc: 'Bấm lần nữa để dừng', isNew: true },
+      { id: 'music', kind: 'game', name: 'Trong màn chơi', desc: 'Bấm lần nữa để dừng' },
+      { id: 'menu-music', kind: 'menu', name: 'Ở menu', desc: 'Menu, bảng xếp hạng, sảnh online', isNew: true },
     ] },
   ];
   const PLAY_ICON = '<svg class="tri" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
@@ -694,6 +882,10 @@
     const S = STYLES[styleId];
     if (moment === 'chain') for (let i = 0; i < 6; i++) S.match(t + i * 0.42, i);
     else if (moment === 'match') S.match(t, 0);
+    else if (moment === 'tick-seq') for (let i = 0; i < 5; i++) S.tick(t + i, i >= 2);
+    else if (moment === 'countdown') { S.count(t); S.count(t + 1); S.count(t + 2); S.go(t + 3); }
+    else if (moment === 'crack-seq') { S.shuffle(t); S.crack(t + 0.12); }
+    else if (moment === 'launch-seq') { S.match(t, 2); S.launch(t + 0.12); }
     else if (moment.startsWith('hit-')) S.hit[moment.slice(4)](t);
     else S[moment](t);
   }
@@ -723,10 +915,10 @@
         b.className = 'play';
         b.setAttribute('aria-label', `Nghe ${m.name}, ${s.name}`);
         b.innerHTML = PLAY_ICON;
-        if (m.id === 'music') {
-          musicBtns[s.id] = b;
+        if (m.kind) {
+          musicBtns[m.kind + ':' + s.id] = b;
           b.setAttribute('aria-pressed', 'false');
-          b.addEventListener('click', () => (music?.id === s.id ? stopMusic() : startMusic(s.id)));
+          b.addEventListener('click', () => (music?.id === s.id && music.kind === m.kind ? stopMusic() : startMusic(s.id, m.kind)));
         } else {
           b.addEventListener('click', () => {
             playMoment(s.id, m.id);
@@ -742,15 +934,20 @@
 
   const musicToggle = document.getElementById('music-toggle');
   function syncMusicUI() {
-    for (const [id, b] of Object.entries(musicBtns)) {
-      const on = music?.id === id;
+    for (const [key, b] of Object.entries(musicBtns)) {
+      const on = !!music && key === music.kind + ':' + music.id;
       b.classList.toggle('playing', on);
       b.innerHTML = on ? STOP_ICON : PLAY_ICON;
       b.setAttribute('aria-pressed', String(on));
     }
-    musicToggle.setAttribute('aria-pressed', String(!!music));
+    musicToggle.setAttribute('aria-pressed', String(music?.kind === 'game'));
   }
-  musicToggle.addEventListener('click', () => (music ? stopMusic() : startMusic(styleId)));
+  // Các nút trên trang cũng phát tiếng bấm nút của bộ đang chọn
+  const tapSound = () => STYLES[styleId].tap(ac());
+  musicToggle.addEventListener('click', () => {
+    tapSound();
+    music?.kind === 'game' ? stopMusic() : startMusic(styleId);
+  });
 
   // ---------- Bàn chơi thử (luật Onet, tối đa 2 lần rẽ) ----------
   const ROWS = 4, COLS = 6;
@@ -969,16 +1166,23 @@
     reshuffle();
     STYLES[styleId].shuffle(ac());
   });
-  document.getElementById('new-game').addEventListener('click', newGame);
+  document.getElementById('new-game').addEventListener('click', () => {
+    tapSound();
+    newGame();
+  });
 
   function setStyle(id) {
     styleId = id;
     matrix.querySelectorAll('[data-col]').forEach((d) => d.classList.toggle('on', d.dataset.col === id));
     // Đang bật nhạc thì đổi sang nhạc của bộ mới
-    if (music && music.id !== id) startMusic(id);
+    if (music && music.id !== id) startMusic(id, music.kind);
   }
   document.querySelectorAll('input[name="style"]').forEach((inp) => {
-    inp.addEventListener('change', () => { if (inp.checked) setStyle(inp.value); });
+    inp.addEventListener('change', () => {
+      if (!inp.checked) return;
+      setStyle(inp.value);
+      tapSound();
+    });
   });
 
   setStyle('wood');

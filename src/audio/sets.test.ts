@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SOUND_SET_IDS } from '../game/storage';
 import { ATTACK_KINDS } from '../pvp/attacks';
 import { FakeVoices, type VoiceCall } from '../test/fakeVoices';
-import { LOOP_STEPS, SFX_NAMES, SOUND_SETS } from './sets';
+import { LOOP_STEPS, SFX_NAMES, SOUND_SETS, type MusicDef } from './sets';
 
 const T0 = 10;
 
@@ -74,19 +74,54 @@ describe('các bộ âm thanh', () => {
     }
   });
 
-  it('nhạc đủ 8 ô nhịp và chỉ đi qua đầu ra nhạc', () => {
-    const OUT = {} as AudioNode;
-    expect(LOOP_STEPS).toBe(128);
+  it('có đủ 15 tiếng', () => {
+    expect(SFX_NAMES).toEqual([
+      'select',
+      'deselect',
+      'match',
+      'wrong',
+      'hint',
+      'shuffle',
+      'clear',
+      'lose',
+      'tap',
+      'count',
+      'go',
+      'warn',
+      'tick',
+      'crack',
+      'launch',
+    ]);
+  });
+
+  it('tiếng tích gấp cũng hợp lệ', () => {
     for (const id of SOUND_SET_IDS) {
-      const { music } = SOUND_SETS[id];
-      const sd = 60 / music.bpm / 4;
-      for (let bar = 0; bar < LOOP_STEPS / 16; bar++) {
-        const v = new FakeVoices();
-        for (let step = bar * 16; step < (bar + 1) * 16; step++) music.play(v, step, step * sd, OUT, sd);
-        expectValid(v.calls, bar * 16 * sd);
-        expect(v.calls.every((c) => c.out === OUT)).toBe(true);
-        expect(ducks(v.calls)).toBe(0);
-      }
+      const v = new FakeVoices();
+      SOUND_SETS[id].sfx.tick(v, T0, 1);
+      expectValid(v.calls, T0);
+      expect(ducks(v.calls)).toBe(0);
     }
   });
+
+  it('nhạc đủ 8 ô nhịp và chỉ đi qua đầu ra nhạc', () => {
+    expect(LOOP_STEPS).toBe(128);
+    for (const id of SOUND_SET_IDS) expectLoop(SOUND_SETS[id].music);
+  });
+
+  it('nhạc menu đủ 8 ô nhịp và chỉ đi qua đầu ra nhạc', () => {
+    for (const id of SOUND_SET_IDS) expectLoop(SOUND_SETS[id].menuMusic);
+  });
 });
+
+/** Mỗi ô nhịp của vòng nhạc có nốt hợp lệ, mọi nốt đi qua đầu ra nhạc được truyền vào, không hạ nhạc. */
+function expectLoop(music: MusicDef): void {
+  const OUT = {} as AudioNode;
+  const sd = 60 / music.bpm / 4;
+  for (let bar = 0; bar < LOOP_STEPS / 16; bar++) {
+    const v = new FakeVoices();
+    for (let step = bar * 16; step < (bar + 1) * 16; step++) music.play(v, step, step * sd, OUT, sd);
+    expectValid(v.calls, bar * 16 * sd);
+    expect(v.calls.every((c) => c.out === OUT)).toBe(true);
+    expect(ducks(v.calls)).toBe(0);
+  }
+}
