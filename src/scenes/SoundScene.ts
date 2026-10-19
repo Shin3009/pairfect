@@ -66,7 +66,8 @@ export class SoundScene extends Phaser.Scene {
       const name = this.add.text(left + 32, cy - 16, set.name, textStyle(30, C.text, 'bold')).setOrigin(0, 0.5);
       this.add.text(left + 32, cy + 20, set.desc, textStyle(20, C.textDim)).setOrigin(0, 0.5);
       const note = this.add.text(left + w - 32, cy, 'Đang dùng', textStyle(22, C.textAccent, 'bold')).setOrigin(1, 0.5);
-      tapZone(this, x, cy, w, CARD_H, 1, () => this.choose(id));
+      // Chọn bộ đã phát tiếng mẫu, không phát thêm tiếng bấm nút
+      tapZone(this, x, cy, w, CARD_H, 1, () => this.choose(id), false);
       this.cards.push({ id, bg, name, note, x: left, y, w });
     });
 
@@ -95,11 +96,10 @@ export class SoundScene extends Phaser.Scene {
     this.time.delayedCall(150, () => playSfx('match'));
   }
 
+  /** Đổi một công tắc. Tiếng bấm nút phát sau khi đổi (xem tapZone): tắt hiệu ứng thì im, bật lại thì nghe ngay. */
   private flip(key: 'sfx' | 'music'): void {
-    const on = !soundSettings()[key];
-    updateSoundSettings({ [key]: on });
+    updateSoundSettings({ [key]: !soundSettings()[key] });
     this.redraw();
-    if (key === 'sfx' && on) playSfx('select');
   }
 
   /** Thẻ của bộ đang chọn có viền và tên màu nhấn, kèm chữ "Đang dùng"; công tắc bật có nền màu nhấn. */

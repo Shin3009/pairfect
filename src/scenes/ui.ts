@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playSfx } from '../audio/sound';
 import { iconTexture, type IconName } from './icons';
 
 /**
@@ -54,7 +55,11 @@ export function textStyle(size: number, color: string, weight = 'normal'): Phase
   return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: weight, resolution: 2 };
 }
 
-/** Vùng chạm của nút. Chặn sự kiện để cú chạm không lọt xuống bàn chơi bên dưới. */
+/**
+ * Vùng chạm của nút. Chặn sự kiện để cú chạm không lọt xuống bàn chơi bên dưới.
+ * Chạm có tác dụng thì phát tiếng bấm nút, sau khi `onTap` chạy xong (nút tắt / bật tiếng kêu theo cài đặt mới).
+ * `onTap` trả về `false` nghĩa là lần chạm không làm gì (nút đang khóa), khi đó im; `sound` là false cho nút có tiếng riêng.
+ */
 export function tapZone(
   scene: Phaser.Scene,
   x: number,
@@ -62,12 +67,13 @@ export function tapZone(
   w: number,
   h: number,
   depth: number,
-  onTap: () => void,
+  onTap: () => unknown,
+  sound = true,
 ): Phaser.GameObjects.Zone {
   const zone = scene.add.zone(x, y, w, h).setInteractive({ useHandCursor: true }).setDepth(depth);
   zone.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
     e.stopPropagation();
-    onTap();
+    if (onTap() !== false && sound) playSfx('tap');
   });
   return zone;
 }
@@ -85,7 +91,8 @@ export class Button {
     w: number,
     h: number,
     text: string,
-    onClick: () => void,
+    /** Trả về `false` nếu lần bấm không làm gì (không có tiếng bấm nút, xem tapZone). */
+    onClick: () => unknown,
     depth = 1,
     fontSize = 28,
   ) {
@@ -119,6 +126,8 @@ export class IconButton {
     icon: IconName,
     onClick: () => void,
     depth = 1,
+    /** false cho nút đã có tiếng riêng (Gợi ý, Đảo bàn): không phát thêm tiếng bấm nút. */
+    sound = true,
   ) {
     this.bg = scene.add.graphics().setDepth(depth);
     this.icon = scene.add
@@ -128,7 +137,8 @@ export class IconButton {
       .setDepth(depth);
     this.badge = scene.add.graphics().setDepth(depth);
     this.count = scene.add.text(0, 0, '', textStyle(15, C.text, 'bold')).setOrigin(0.5).setDepth(depth);
-    this.zone = tapZone(scene, x, y, size, size, depth, () => this.enabled && onClick());
+    // Nút đang khóa: không làm gì và không kêu
+    this.zone = tapZone(scene, x, y, size, size, depth, () => (this.enabled ? onClick() : false), sound);
   }
 
   /** Đổi biểu tượng, giữ nguyên cỡ và màu. */
@@ -256,7 +266,8 @@ export function showDialog(scene: Phaser.Scene, opts: DialogOptions): () => void
         BTN_W,
         BTN_H,
         a.label,
-        () => Date.now() >= armedAt && a.onClick(),
+        // Lần chạm bị bỏ qua (hộp vừa hiện) trả về false: không làm gì và không kêu
+        () => (Date.now() >= armedAt ? a.onClick() : false),
         depth + 2,
       ),
   );

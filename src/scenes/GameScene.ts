@@ -455,9 +455,10 @@ export class GameScene extends Phaser.Scene {
     }
     x += 20;
     // Huy hiệu số lượt nhô ra mép phải nút Gợi ý / Đảo bàn, nên chừa khoảng cách rộng hơn
-    this.hintBtn = keep(new IconButton(this, x + HUD_BTN / 2, cy, HUD_BTN, 'hint', () => this.useHint()));
+    // Gợi ý và Đảo bàn có tiếng riêng, không phát thêm tiếng bấm nút
+    this.hintBtn = keep(new IconButton(this, x + HUD_BTN / 2, cy, HUD_BTN, 'hint', () => this.useHint(), 1, false));
     x += HUD_BTN + 16;
-    this.shuffleBtn = keep(new IconButton(this, x + HUD_BTN / 2, cy, HUD_BTN, 'shuffle', () => this.useShuffle()));
+    this.shuffleBtn = keep(new IconButton(this, x + HUD_BTN / 2, cy, HUD_BTN, 'shuffle', () => this.useShuffle(), 1, false));
     x += HUD_BTN + 16;
     // Đấu online không tạm dừng được: nút này mở hộp hỏi đầu hàng
     keep(new Button(this, x + HUD_BTN / 2, cy, HUD_BTN, HUD_BTN, 'II', () => this.pause(), 1, 22));
